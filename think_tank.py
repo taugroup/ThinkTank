@@ -11,7 +11,7 @@ from agno.models.ollama import Ollama
 from agno.memory.v2.memory import Memory
 from agno.storage.sqlite import SqliteStorage
 from agno.memory.v2.db.sqlite import SqliteMemoryDb
-from agno.memory.v2.types import UserMemory
+from agno.memory.v2 import UserMemory
 
 from utils import now, indent
 from agent_builder import build_local_agent
@@ -26,10 +26,10 @@ class Message:
     def chatml(self) -> Dict[str, str]:
         return {"role": "user" if self.role == "human" else "assistant", "content": self.content}
     
-class VirtualLab:
-    """Exact meeting‑loop replica running on local deepseek‑r1:7b."""
+class ThinkTank:
+    """Exact meeting loop replica running on local ollama."""
 
-    def __init__(self, project_description: str, db_path: str = "virtual_lab.db") -> None:
+    def __init__(self, project_description: str, db_path: str = "ThinkTank.db") -> None:
         self.project_description = project_description
 
         # ── Persistent state ────────────────────────────────────────────────
@@ -156,7 +156,7 @@ class VirtualLab:
             print(indent(f"{self.critic.name}: {critique}"))
 
             synth = self.pi.run(
-                f"Context so far:\n{self._context()}\n\nSynthesise round {r} and pose follow‑ups.",
+                f"Context so far:\n{self._context()}\n\nSynthesise round {r} and pose follow-ups.",
                 stream=False,
             ).content
             self._log("pi", self.pi.name, synth)
@@ -169,7 +169,7 @@ class VirtualLab:
         self._log("pi", self.pi.name, summary)
         print("\n=== Meeting Complete ===\n")
 
-        self._memory.add_user_memory(UserMemory(text=summary), user_id="virtual_lab")
+        self._memory.add_user_memory(UserMemory(memory = summary), user_id="think_tank")
         return summary
 
     # ------------------------------------------------------------------
@@ -205,7 +205,7 @@ class VirtualLab:
             self._log("scientist", agent.name, answer)
             print(indent(answer))
 
-        self._memory.add_user_memory(UserMemory(text = answer),"virtual_lab")
+        self._memory.add_user_memory(UserMemory(memory = answer),"think_tank")
         print("=== Individual Meeting Complete ===")
         return answer
 
@@ -249,14 +249,14 @@ class VirtualLab:
         )
         merged = self.pi.run(merge_prompt, stream=False).content
         self._log("pi", self.pi.name, merged)
-        self._memory.add_user_memory(UserMemory(text = merged),"virtual_lab")
+        self._memory.add_user_memory(UserMemory(memory = merged),"think_tank")
         return merged
 
 
 if __name__ == "__main__":
     DESC = (
         "Use machine learning to develop nanobodies that bind to KP.3 variant "
-        "of SARS‑CoV‑2 spike protein while retaining cross‑reactivity."
+        "of SARS-CoV-2 spike protein while retaining cross-reactivity."
     )
-    lab = VirtualLab(DESC)
+    lab = ThinkTank(DESC)
     lab.run_team_meeting("Choose initial nanobody design strategy")
