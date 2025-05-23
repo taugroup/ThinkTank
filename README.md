@@ -52,8 +52,8 @@ ollama serve                      # Starts the Ollama server on localhost:11434
 ### 2. Clone and install Python dependencies
 
 ```bash
-git clone https://github.com/taugroup/AutoLab
-cd virtual-lab
+git clone https://github.com/taugroup/autolab.git
+cd autolab
 
 # Create a clean environment (recommended)
 python -m venv .venv
