@@ -1,6 +1,6 @@
-# Virtual Lab – Agentic Research Simulation.
+# AutoLab – Agentic Research Simulation.
 
-**Virtual Lab** is a fully local, agentic research platform that replicates the team-based architecture described in the paper:
+**AutoLab** is a fully local, agentic research platform that replicates the team-based architecture described in the paper:
 
 > *The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*  
 > [Read the paper](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1)
@@ -11,7 +11,7 @@ This implementation simulates a scientific team made up of local LLM-based agent
 
 ## 💡 What It Does
 
-Virtual Lab orchestrates collaborative research meetings between the following agents:
+AutoLab orchestrates collaborative research meetings between the following agents:
 
 - **Principal Investigator (PI)**  
   Synthesizes all ideas, resolves debates, and produces final meeting summaries and project decisions.
@@ -52,7 +52,7 @@ ollama serve                      # Starts the Ollama server on localhost:11434
 ### 2. Clone and install Python dependencies
 
 ```bash
-git clone https://github.com/yourusername/virtual-lab
+git clone https://github.com/taugroup/AutoLab
 cd virtual-lab
 
 # Create a clean environment (recommended)
