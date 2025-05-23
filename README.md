@@ -1,6 +1,6 @@
-# AutoLab – Agentic Research Simulation.
+# ThinkTank – Agentic Research Simulation.
 
-**AutoLab** is a fully local, agentic research platform that replicates the team-based architecture described in the paper:
+**ThinkTank** is a fully local, agentic research platform that replicates the team-based architecture described in the paper:
 
 > *The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*  
 > [Read the paper](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1)
@@ -11,7 +11,7 @@ This implementation simulates a scientific team made up of local LLM-based agent
 
 ## 💡 What It Does
 
-AutoLab orchestrates collaborative research meetings between the following agents:
+ThinkTank orchestrates collaborative research meetings between the following agents:
 
 - **Principal Investigator (PI)**  
   Synthesizes all ideas, resolves debates, and produces final meeting summaries and project decisions.
@@ -52,8 +52,8 @@ ollama serve                      # Starts the Ollama server on localhost:11434
 ### 2. Clone and install Python dependencies
 
 ```bash
-git clone https://github.com/taugroup/autolab.git
-cd autolab
+git clone https://github.com/taugroup/ThinkTank.git
+cd ThinkTank
 
 # Create a clean environment (recommended)
 python -m venv .venv

@@ -26,8 +26,8 @@ def build_custom_thinktank(project_desc: str, scientists_def: List[Dict[str, str
         )
     return lab
 
-st.set_page_config(page_title="Virtual Lab - Think Tank", layout="wide")
-st.title("🧪 ThankTank - Lab Simulator")
+st.set_page_config(page_title="Think Tank", layout="wide")
+st.title("🧪 ThinkTank - Lab Simulator")
 
 st.sidebar.header("Project Setup")
 project_desc = st.sidebar.text_area(
