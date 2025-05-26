@@ -29,7 +29,7 @@ class Message:
 class ThinkTank:
     """Exact meeting loop replica running on local ollama."""
 
-    def __init__(self, project_description: str, db_path: str = "ThinkTank.db") -> None:
+    def __init__(self, project_description: str, db_path: str = "ThinkTank.db", initialize = False) -> None:
         self.project_description = project_description
 
         # ── Persistent state ────────────────────────────────────────────────
@@ -65,7 +65,8 @@ class ThinkTank:
         self._messages: List[Message] = []
 
         # Build initial scientists from the PI’s suggestion ------------------
-        self._init_scientists()
+        if initialize:
+            self._init_scientists()
 
     # ------------------------------------------------------------------
     # Agent generation

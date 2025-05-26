@@ -2,3 +2,6 @@ sqlalchemy
 ollama
 agno
 tiktoken
+python-docx
+reportlab
+markdown2
