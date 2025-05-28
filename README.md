@@ -1,6 +1,6 @@
 # ThinkTank – Agentic Research Simulation.
 
-**ThinkTank** is a fully local, agentic research platform that replicates the team-based architecture described in the paper:
+**ThinkTank** is a fully local, agentic research platform that follows the team-based architecture described in the paper:
 
 > *The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*  
 > [Read the paper](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1)
