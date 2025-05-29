@@ -5,27 +5,27 @@
 > *The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*  
 > [Read the paper](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1)
 
-This implementation simulates a team made up of local LLM-based agents, running fully offline via [Ollama](https://ollama.com) and powered by the `Llama3.1` model.
+This implementation simulates a team made up of local LLM-based agents/experts, running fully offline via [Ollama](https://ollama.com) and powered by the `Llama3.1` model.
 
 ---
 
 ## 💡 What It Does
 
-ThinkTank orchestrates collaborative research meetings between the following agents:
+ThinkTank orchestrates collaborative meetings between the following agents:
 
 - **Principal Investigator (PI)**  
   Synthesizes all ideas, resolves debates, and produces final meeting summaries and project decisions.
 
-- **Scientific Critic**  
+- **Critic Thinker**  
   Points out flaws, inconsistencies, or gaps in reasoning, and demands scientific rigor.
 
-- **Dynamic Scientist Agents**  
-  Three scientists are created on-the-fly based on your project description. Each has a different role, expertise, and contribution style.
+- **Domain Experts**  
+  Experts are created on-the-fly based on your project description. Each has a different role, expertise, and contribution style.
 
 ### Meeting Types Supported
 
 - **Team Meetings**: All agents interact in multi-round discussions on a shared agenda.
-- **Individual Meetings**: One scientist is paired with the critic for focused work.
+- **Individual Meetings**: One expert is paired with the critic for focused work.
 - **Parallel + Merge**: Multiple creative meetings are run in parallel, and their results are merged into a single synthesis.
 
 All meeting discussions and summaries are **stored in a local memory database** for future reference and summarization.
@@ -69,7 +69,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### 4. `meeting_transcript.txt` will contain the responses from all the agents.
+### 4. `meeting_transcript.txt` contains the responses from all the agents.
 
 ---
 
