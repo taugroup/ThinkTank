@@ -4,161 +4,30 @@ from pathlib import Path
 from typing import Dict, List, Any
 import json
 import time
-import io
+import base64
 
 import streamlit as st
 
 from agent_builder import build_local_agent
 from think_tank import ThinkTank
+from utils import export_meeting
 from agno.memory.v2 import UserMemory
-
-from docx import Document
-from reportlab.lib.pagesizes import LETTER
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
-from reportlab.lib.units import inch
-import markdown2
 
 DB_FILE = Path("projects_db.json")
 TEMPLATE_FILE = Path("scientist_templates.json")
 
+def img_to_base64(path):
+    return base64.b64encode(Path(path).read_bytes()).decode()
 
-def _docx_bytes(project: str,
-                desc: str,
-                scientists: List[Dict[str, str]],
-                meeting: Dict[str, any]) -> bytes:
-    doc = Document()
-    doc.add_heading(project, level=0)
-    doc.add_paragraph(desc)
+img_b64 = img_to_base64("assets/Logo_tau.png")
 
-    doc.add_heading("Scientists", level=1)
-    table = doc.add_table(rows=1, cols=4)
-    hdr = table.rows[0].cells
-    hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = "Title", "Expertise", "Goal", "Role"
-    for s in scientists:
-        row = table.add_row().cells
-        row[0].text, row[1].text, row[2].text, row[3].text = (
-            s["title"], s["expertise"], s["goal"], s["role"]
-        )
+if "rows" not in st.session_state:
+    st.session_state.rows = []
 
-    doc.add_heading(f"Meeting: {meeting['topic']}", level=1)
-    doc.add_paragraph(f"Rounds: {meeting['rounds']}")
-    doc.add_heading("Transcript", level=2)
-    for m in meeting["transcript"]:
-        doc.add_paragraph(f"{m['name']}: {m['content']}")
+if "selected_template" not in st.session_state:
+    st.session_state.selected_template = "<select>"
 
-    doc.add_heading("Summary", level=2)
-    doc.add_paragraph(meeting["summary"])
-
-    buf = io.BytesIO()
-    doc.save(buf)
-    return buf.getvalue()
-
-def _rtf_bytes(project: str,
-               desc: str,
-               scientists: List[Dict[str, str]],
-               meeting: Dict[str, any]) -> bytes:
-    """Return a very basic RTF (manual string build, no external lib)."""
-    def esc(txt: str) -> str:
-        return txt.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
-
-    lines = [
-        r"{\rtf1\ansi\deff0",
-        r"\fs32\b " + esc(project) + r"\b0\par",
-        r"\fs24 " + esc(desc) + r"\par\par",
-        r"\b Scientists\b0\par",
-    ]
-    for s in scientists:
-        lines.append(esc(f"{s['title']} | {s['expertise']} | {s['goal']} | {s['role']}") + r"\par")
-    lines.extend([
-        r"\par\b Meeting: " + esc(meeting["topic"]) + r"\b0\par",
-        esc(f"Rounds: {meeting['rounds']}") + r"\par\par",
-        r"\b Transcript\b0\par",
-    ])
-    for m in meeting["transcript"]:
-        lines.append(esc(f"{m['name']}: {m['content']}") + r"\par")
-    lines.extend([r"\par\b Summary\b0\par", esc(meeting["summary"]), r"\par}", ""])
-    return "\n".join(lines).encode("utf-8")
-
-def _pdf_bytes(project: str,
-               desc: str,
-               scientists: List[Dict[str, str]],
-               meeting: Dict[str, any]) -> bytes:
-    
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=LETTER)
-    styles = getSampleStyleSheet()
-    elements = []
-
-    # Project title and description
-    elements.append(Paragraph(f"<b>{project}</b>", styles['Title']))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(desc, styles['Normal']))
-    elements.append(Spacer(1, 12))
-
-    # Scientists Table
-    elements.append(Paragraph("Scientists", styles['Heading1']))
-    data = [["Title", "Expertise", "Goal", "Role"]]
-    for s in scientists:
-        row = [
-            Paragraph(s["title"], styles['Normal']),
-            Paragraph(s["expertise"], styles['Normal']),
-            Paragraph(s["goal"], styles['Normal']),
-            Paragraph(s["role"], styles['Normal']),
-        ]
-        data.append(row)
-
-    # Adjust column widths to prevent overflow
-    col_widths = [1.5*inch, 2.5*inch, 2.5*inch, 1.5*inch]
-    table = Table(data, colWidths=col_widths, hAlign='LEFT')
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-    ]))
-    elements.append(table)
-    elements.append(Spacer(1, 12))
-
-    # Meeting Topic
-    elements.append(Paragraph(f"Meeting: {meeting['topic']}", styles['Heading1']))
-    elements.append(Paragraph(f"Rounds: {meeting['rounds']}", styles['Normal']))
-    elements.append(Spacer(1, 12))
-
-    # Transcript with markdown parsing
-    elements.append(Paragraph("Transcript", styles['Heading2']))
-    for m in meeting["transcript"]:
-        name = f"<b>{m['name']}:</b> "
-        content_html = markdown2.markdown(m["content"])
-        content_clean = content_html.replace("<p>", "").replace("</p>", "").strip()
-        elements.append(Paragraph(name + content_clean, styles['Normal']))
-        elements.append(Spacer(1, 6))
-    elements.append(Spacer(1, 12))
-
-    # Summary
-    elements.append(Paragraph("Summary", styles['Heading2']))
-    elements.append(Paragraph(meeting["summary"], styles['Normal']))
-
-    # Build PDF
-    doc.build(elements)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
-
-def export_meeting(project_name: str,
-                   project_desc: str,
-                   scientists: List[Dict[str, str]],
-                   meeting: Dict[str, any]) -> Dict[str, bytes]:
-    """
-    Returns {'docx': …, 'rtf': …, 'pdf': …}  - each value is file bytes.
-    """
-    return {
-        "docx": _docx_bytes(project_name, project_desc, scientists, meeting),
-        "rtf": _rtf_bytes(project_name, project_desc, scientists, meeting),
-        "pdf": _pdf_bytes(project_name, project_desc, scientists, meeting),
-    }
+rows = st.session_state.rows
 
 def download_function(project_name: str,
                             project_desc: str,
@@ -240,7 +109,7 @@ def run_thinktank_meeting(
     st.subheader(f"🧑‍🔬 Team Meeting - {meeting_topic}")
 
     def write(name: str, content: str):
-        st.markdown(f"**—— {name} ——**")
+        st.markdown(f"#### —— {name} ——")
         st.markdown(content)
 
     transcript: List[Dict[str, str]] = []
@@ -309,14 +178,41 @@ def run_thinktank_meeting(
     return proj
 
 st.set_page_config(page_title="Think Tank", layout="wide")
-st.title("🧪 Think Tank - Lab Simulator")
+st.markdown(
+    """
+    <style>
+        [data-testid="stSidebar"] {
+            width: 500px;
+            max-width: 1500px;
+        }
+        [data-testid="stSidebar"] + div .block-container {
+            padding-left: 300px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+st.markdown(
+    "<h1 style='text-align:center;'>🧠 Think Tank</h1>",
+    unsafe_allow_html=True,
+)
 
 projects_db = _load_projects()
 project_names = sorted(projects_db.keys())
 
 # ── Project selection / creation 
+st.sidebar.markdown(
+    f"""
+    <div style="display: flex; align-items: center;">
+        <img src="data:image/png;base64,{img_b64}" width="40" style="margin-right:10px;">
+        <span style="font-size: 14px;">Developed by TAU Group</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+st.sidebar.markdown("---")
 st.sidebar.header("Project Manager")
-proj_choice = st.sidebar.selectbox("Project", ["➕ New project"] + project_names)
+proj_choice = st.sidebar.selectbox("Select a Project", ["➕ New project"] + project_names)
 
 if proj_choice == "➕ New project":
     project_name = st.sidebar.text_input("New project name")
@@ -335,10 +231,10 @@ project_desc = st.sidebar.text_area("Project description", value=project_data.ge
 # Scientist templates loaded from disk 
 TEMPLATES: List[Dict[str, str]] = _load_templates()
 
-st.sidebar.subheader("Scientists")
+st.sidebar.subheader("Scientist Manager")
 
 # Template management
-with st.sidebar.expander("Manage templates", expanded=False):
+with st.sidebar.expander("Manage Scientists and templates", expanded=False):
     # Select existing template to load
     selected_tpl_title = st.selectbox("Load template to edit", ["<new>"] + [t["title"] for t in TEMPLATES], key="tpl_select")
 
@@ -370,39 +266,42 @@ with st.sidebar.expander("Manage templates", expanded=False):
         _save_templates(TEMPLATES)
         (st.rerun if hasattr(st, 'rerun') else st.experimental_rerun)()
 
-#  Load or initialise project rows  project rows 
-rows = project_data.get("scientists", [])
+    #  Load or initialise project rows  project rows 
+    if proj_choice == '➕ New project':
+        if "rows" not in st.session_state:
+            st.session_state.rows = project_data.get("scientists", [])
+    else:
+        st.session_state.rows = project_data.get("scientists", [])
 
-#  Add from template --
-sel_template = st.sidebar.selectbox("Add scientist from template", ["<select>"] + [t["title"] for t in TEMPLATES])
-if sel_template != "<select>":
-    if sel_template not in [r["title"] for r in rows]:
-        rows.append(next(t for t in TEMPLATES if t["title"] == sel_template))
-        _save_projects(projects_db)
-        (st.rerun if hasattr(st, 'rerun') else st.experimental_rerun)()
+    def _add_template():
+        sel = st.session_state.tpl_selectbox
+        if sel != "<select>" and sel not in [r["title"] for r in st.session_state.rows]:
+            st.session_state.rows.append(next(t for t in TEMPLATES if t["title"] == sel))
+            _save_projects(projects_db)
+        st.session_state.tpl_selectbox = "<select>"
 
-#  Delete scientists 
-if rows:
-    del_choice = st.sidebar.multiselect("Delete scientist(s)", [r["title"] for r in rows])
-    if del_choice and st.sidebar.button("Remove selected scientist(s)"):
-        rows = [r for r in rows if r["title"] not in del_choice]
-        _save_projects(projects_db)
-        (st.rerun if hasattr(st, 'rerun') else st.experimental_rerun)()
+    #  Add from template --
+    st.selectbox(
+        "Add scientist from template",
+        ["<select>"] + [t["title"] for t in TEMPLATES],
+        key="tpl_selectbox",
+        on_change=_add_template,
+    )
 
-#  Manual create scientist 
-if st.sidebar.button("Add blank scientist"):
-    rows.append({"title": f"Scientist {len(rows)+1}", "expertise": "", "goal": "", "role": ""})
+    #  Manual create scientist 
+    if st.button("Add blank scientist"):
+        st.session_state.rows.append({"title": f"Scientist {len(st.session_state.rows)+1}", "expertise": "", "goal": "", "role": ""})
+        st.rerun()
 
-#  Editable table 
-rows = rows[:8]  # limit to 8
-scientist_table = st.sidebar.data_editor(rows, num_rows="dynamic", use_container_width=True, key="scientist_table")
-
-num_scientists = len(scientist_table)
+    #  Editable table 
+    st.session_state.rows = st.session_state.rows[:8]  # limit to 8
+    scientist_table = st.data_editor(st.session_state.rows, num_rows="dynamic", use_container_width=True, key="scientist_table")
 
 # ── Meeting selection / creation -- / creation --
+st.sidebar.subheader("Team Meeting")
 meetings = project_data.get("meetings", [])
 meeting_labels = [f"{i+1}. {m['topic']}" for i, m in enumerate(meetings)]
-meeting_choice = st.sidebar.selectbox("Meeting", ["New meeting"] + meeting_labels)
+meeting_choice = st.sidebar.selectbox("Select a meeting", ["New meeting"] + meeting_labels)
 
 if meeting_choice == "New meeting":
     meeting_topic = st.sidebar.text_input("New meeting topic / title")
