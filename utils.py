@@ -1,13 +1,30 @@
 from datetime import datetime
 from typing import Dict, List
 import tempfile
-import re, os, copy
+import re, os, copy, shutil, subprocess, tempfile
 import pandas as pd
 import pypandoc
 pypandoc.download_pandoc()
 
 from docx import Document
 from docx.shared import Pt
+
+MERMAID_BLOCK = re.compile(r"```mermaid(.*?)```", re.S)
+
+def _render_mermaid(code: str, out_png: str):
+    """Render mermaid code to PNG with mermaid-cli (`mmdc`)."""
+    with tempfile.NamedTemporaryFile("w", suffix=".mmd", delete=False) as tmp:
+        tmp.write(code)
+        tmp_path = tmp.name
+    try:
+        subprocess.run(
+            ["mmdc", "-i", tmp_path, "-o", out_png, "-b", "transparent"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    finally:
+        os.remove(tmp_path)
 
 def now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -45,9 +62,20 @@ def _docx_bytes(project_name: str,
         f"**Exported on:** {now()}\n"
     )
     full_markdown = f"{header_md}\n\n{body_md}"
+
+    images_dir = tempfile.mkdtemp()
+    def _replace(match, counter=[0]):
+        counter[0] += 1
+        code = match.group(1).strip()
+        img_path = os.path.join(images_dir, f"mermaid_{counter[0]}.png")
+        _render_mermaid(code, img_path)
+        return f"![diagram-{counter[0]}]({img_path})"
+
+    full_md = MERMAID_BLOCK.sub(_replace, full_markdown)
+
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
         tmp_path = tmp.name
-    pypandoc.convert_text(full_markdown, to="docx", format="md", outputfile=tmp_path)
+    pypandoc.convert_text(full_md, to="docx", format="md", outputfile=tmp_path)
 
     doc = Document(tmp_path)
     for table in doc.tables:
@@ -66,6 +94,7 @@ def _docx_bytes(project_name: str,
 
     os.remove(tmp_path)
     os.remove(out_path)
+    shutil.rmtree(images_dir, ignore_errors=True)
 
     return docx_bytes
 
