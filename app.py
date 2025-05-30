@@ -30,28 +30,21 @@ if "rows" not in st.session_state:
 if "selected_template" not in st.session_state:
     st.session_state.selected_template = "<select>"
 
+if "markdown_log" not in st.session_state:
+    st.session_state.markdown_log = []
+
 rows = st.session_state.rows
 
 def download_function(project_name: str,
                             project_desc: str,
                             project_data: Dict[str, Any],
-                            meeting: Dict[str, Any]) -> None:
+                            meeting: Dict[str, Any],
+                            transcript) -> None:
     
-    files = export_meeting(project_name, project_desc, project_data["scientists"], meeting)
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.download_button("⬇️  DOCX", files["docx"],
-                        file_name=f"{meeting['topic']}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    with col2:
-        st.download_button("⬇️  RTF", files["rtf"],
-                        file_name=f"{meeting['topic']}.rtf",
-                        mime="application/rtf")
-    with col3:
-        st.download_button("⬇️  PDF", files["pdf"],
-                        file_name=f"{meeting['topic']}.pdf",
-                        mime="application/pdf")
+    files = export_meeting(project_name, project_desc, project_data["scientists"], meeting, transcript)
+    st.download_button("⬇️  DOCX", files["docx"],
+                    file_name=f"{meeting['topic']}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 #  project DB 
 
@@ -100,6 +93,12 @@ def build_custom_thinktank(project_desc: str, scientists: List[Dict[str, str]]) 
         )
     return lab
 
+def write(name: str, content: str):
+        st.markdown(f"## 🧑‍🔬 {name} \n")
+        st.session_state.markdown_log.append(f"## 🧑‍🔬 {name} \n")
+        st.markdown(content)
+        st.session_state.markdown_log.append(content)
+
 def run_thinktank_meeting(
     project_name: str,
     project_desc: str,
@@ -115,6 +114,7 @@ def run_thinktank_meeting(
         for scientist in st.session_state.rows:
             print(f"Processing scientist: {scientist['title']}")
             files = scientist.get('files', [])
+            print(f"Files for {scientist['title']}: {files}")
             file_bytes_list = [(f.name, f.getvalue()) for f in files]
 
             future = executor.submit(process_documents, file_bytes_list, clean_name(scientist['title']))
@@ -130,14 +130,8 @@ def run_thinktank_meeting(
     lab = build_custom_thinktank(project_desc, scientists)
 
     st.subheader(f"🧑‍🔬 Team Meeting - {meeting_topic}")
-
-    def write(name: str, content: str):
-        st.markdown(f"## 🧑‍🔬 {name} \n")
-        st.markdown(content)
-
-    transcript: List[Dict[str, str]] = []
+    st.session_state.markdown_log.append(f"# 🧑‍🔬 Team Meeting - {meeting_topic}")
     def log(name: str, content: str):
-        transcript.append({"name": name, "content": content})
         write(name, content)
 
     # PI opening
@@ -150,6 +144,7 @@ def run_thinktank_meeting(
     # Discussion rounds 
     for r in range(1, rounds + 1):
         st.markdown(f"### 🔄 Round {r}/{rounds}")
+        st.session_state.markdown_log.append(f"### 🔄 Round {r}/{rounds}")
         for sci in lab.scientists:
 
             tool_prompt = f"""
@@ -201,20 +196,24 @@ def run_thinktank_meeting(
     lab._log("pi", lab.pi.name, summary)
 
     st.subheader("📝 Final Meeting Summary")
+    st.session_state.markdown_log.append("📝 Final Meeting Summary")
     st.markdown(summary)
+    st.session_state.markdown_log.append(summary)
 
     lab._memory.add_user_memory(memory=UserMemory(memory=summary), user_id=project_name)
 
 
     # Save to DB
     proj = projects_db.setdefault(project_name, {"description": project_desc, "scientists": scientists, "meetings": []})
+    for sci in scientists:
+        sci.pop("files", None)  # remove files from scientists to avoid bloating the DB
     proj["description"] = project_desc
     proj["scientists"] = scientists
     proj["meetings"].append({
         "timestamp": int(time.time()),
         "topic": meeting_topic,
         "rounds": rounds,
-        "transcript": transcript,
+        "transcript": st.session_state.markdown_log,
         "summary": summary,
     })
     _save_projects(projects_db)
@@ -315,7 +314,8 @@ with st.sidebar.expander("Manage Scientists and templates", expanded=False):
         if "rows" not in st.session_state:
             st.session_state.rows = project_data.get("scientists", [])
     else:
-        st.session_state.rows = project_data.get("scientists", [])
+        if len(st.session_state.rows) < 1 or 'files' not in st.session_state.rows[-1]:
+            st.session_state.rows = project_data.get("scientists", [])
 
     def _add_template():
         sel = st.session_state.tpl_selectbox
@@ -383,14 +383,23 @@ if meeting_choice == "New meeting":
             st.error("Provide at least one scientist")
             st.stop()
         proj = run_thinktank_meeting(project_name, project_desc, clean_scientists, meeting_topic, rounds, projects_db)
-        download_function(project_name, project_desc, project_data, proj["meetings"][-1])
+        download_function(project_name, project_desc, project_data, proj["meetings"][-1], st.session_state.markdown_log)
 else:
     # Load existing meeting 
     sel_index = meeting_labels.index(meeting_choice)
     meeting = meetings[sel_index]
     st.markdown(f"## 🗂️ Meeting Record - {meeting['topic']}")
+    st.session_state.markdown_log.append(f"## 🗂️ Meeting Record - {meeting['topic']}")
     for msg in meeting["transcript"]:
-        st.markdown(f"**{msg['name']}**: {msg['content']}")
+        if type(msg) is dict:
+            name = msg.get("name", "Unknown")
+            content = msg.get("content", "")
+            write(name, content)
+        else:
+            st.markdown(msg)
+            st.session_state.markdown_log.append(msg)
     st.markdown("### Summary")
+    st.session_state.markdown_log.append("### Summary")
     st.markdown(meeting["summary"])
-    download_function(project_name, project_desc, project_data, meeting)
+    st.session_state.markdown_log.append(meeting["summary"])
+    download_function(project_name, project_desc, project_data, meeting, meeting['transcript'])

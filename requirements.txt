@@ -11,3 +11,7 @@ langchain_community
 langchain-text-splitters
 pypdf
 streamlit
+pypandoc
+pandas
+tabulate
+pypandoc

@@ -6,3 +6,4 @@ meeting_transcript.txt
 chromadb
 logs
 .DS_Store
+pandoc-*
