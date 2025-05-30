@@ -13,7 +13,7 @@ This implementation simulates a team made up of local LLM-based agents/experts, 
 
 ThinkTank orchestrates collaborative meetings between the following agents:
 
-- **Principal Investigator (PI)**  
+- **Generalized Coordinator**  
   Synthesizes all ideas, resolves debates, and produces final meeting summaries and project decisions.
 
 - **Critic Thinker**  
