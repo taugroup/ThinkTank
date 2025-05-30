@@ -2,3 +2,7 @@
 __*
 meeting_transcript.txt
 *.json
+.venv
+chromadb
+logs
+.DS_Store

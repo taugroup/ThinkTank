@@ -1,4 +1,5 @@
 from __future__ import annotations
+import concurrent.futures
 
 from pathlib import Path
 from typing import Dict, List, Any
@@ -9,8 +10,10 @@ import base64
 import streamlit as st
 
 from agent_builder import build_local_agent
+from ingestion import process_documents
+from retrieval import retrieve_documents
 from think_tank import ThinkTank
-from utils import export_meeting
+from utils import export_meeting, clean_name
 from agno.memory.v2 import UserMemory
 
 DB_FILE = Path("projects_db.json")
@@ -83,6 +86,7 @@ def _save_templates(templates: List[Dict[str, str]]) -> None:
 def build_custom_thinktank(project_desc: str, scientists: List[Dict[str, str]]) -> ThinkTank:
     lab = ThinkTank(project_desc)
     lab.scientists.clear()
+    tools = [retrieve_documents]
     for sd in scientists:
         lab.scientists.append(
             build_local_agent(
@@ -91,6 +95,7 @@ def build_custom_thinktank(project_desc: str, scientists: List[Dict[str, str]]) 
                 role=sd["role"],
                 memory=lab._memory,
                 storage=lab._storage,
+                tools=tools,
             )
         )
     return lab
@@ -104,12 +109,30 @@ def run_thinktank_meeting(
     projects_db: Dict[str, Any],
 ):
     """Execute a team meeting and write transcript + summary back to database."""
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = []
+        for scientist in st.session_state.rows:
+            print(f"Processing scientist: {scientist['title']}")
+            files = scientist.get('files', [])
+            file_bytes_list = [(f.name, f.getvalue()) for f in files]
+
+            future = executor.submit(process_documents, file_bytes_list, clean_name(scientist['title']))
+            futures.append(future)
+
+        # Optionally wait for all to complete and handle exceptions
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                st.error(f"Error during ingestion: {e}")
+
     lab = build_custom_thinktank(project_desc, scientists)
 
     st.subheader(f"🧑‍🔬 Team Meeting - {meeting_topic}")
 
     def write(name: str, content: str):
-        st.markdown(f"#### —— {name} ——")
+        st.markdown(f"## 🧑‍🔬 {name} \n")
         st.markdown(content)
 
     transcript: List[Dict[str, str]] = []
@@ -119,7 +142,7 @@ def run_thinktank_meeting(
 
     # PI opening
     pi_open = lab.pi.run(
-        f"You are convening a team meeting. Agenda: {meeting_topic}. Share initial guidance.",
+        f"You are convening a team meeting. Agenda: {meeting_topic}. Share initial guidance to the scientists..",
         stream=False,
     ).content
     log(lab.pi.name, pi_open)
@@ -128,8 +151,29 @@ def run_thinktank_meeting(
     for r in range(1, rounds + 1):
         st.markdown(f"### 🔄 Round {r}/{rounds}")
         for sci in lab.scientists:
+
+            tool_prompt = f"""
+                You have access to the following tool:
+
+                1.Tool: `retrieve_documents`
+                    - Purpose: Retrieve relevant document chunks from the knowledge database using natural language queries.
+                    - Usage:
+                        1. Analyze the current task or context and formulate meaningful queries.
+                        2. Call: retrieve_documents(queries: List[str], collection_name: str) -> List[str]
+                        3. Use collection_name = {clean_name(sci.name)}
+
+                    Instructions:
+                    - First, think about what information is needed to accomplish your task.
+                    - Generate targeted, specific queries based on your expertise.
+                    - Use `retrieve_documents` to fetch supporting content.
+                    - Incorporate retrieved content directly into your reasoning or task output.
+                    - **Do not output the summary or paraphrase the retrieved content — use it as-is.**
+
+                Your goal is to leverage the retrieved knowledge to solve the task accurately and completely.
+            """
+
             resp = sci.run(
-                f"Context so far:\n{lab._context()}\n\nYour contribution for round {r}:",
+                f"{tool_prompt}\nContext so far:\n{lab._context()}\n\nYour contribution for round {r}:",
                 stream=False,
             ).content
             lab._log("scientist", sci.name, resp)
@@ -295,7 +339,33 @@ with st.sidebar.expander("Manage Scientists and templates", expanded=False):
 
     #  Editable table 
     st.session_state.rows = st.session_state.rows[:8]  # limit to 8
-    scientist_table = st.data_editor(st.session_state.rows, num_rows="dynamic", use_container_width=True, key="scientist_table")
+    display_rows = []
+    real_rows = st.session_state.rows
+    for r in real_rows:
+        r_view = r.copy()
+        if "files" in r_view:
+            # show just the count or filenames
+            val = r_view["files"]
+            r_view["files"] = len(val) if isinstance(val, (list, tuple)) else (val or 0)
+        display_rows.append(r_view)
+
+    scientist_table = st.data_editor(display_rows, num_rows="dynamic", use_container_width=True, key="scientist_table")
+
+    def _files_changed(i: int):
+        uploaded = st.session_state[f"files_{i}"]      # new value after change
+        st.session_state.rows[i]["files"] = uploaded
+        print(f"Files for scientist {i}: {[f.name for f in uploaded]}")
+
+    for i, scientist in enumerate(st.session_state.rows):
+        c = st.container()
+        c.markdown(f"### Files for {scientist['title'] or f'Scientist {i+1}'}")
+        c.file_uploader(
+            "Choose files for the vector store",
+            accept_multiple_files=True,
+            key=f"files_{i}",
+            on_change=_files_changed,
+            args=(i,),        # pass only the index
+        )
 
 # ── Meeting selection / creation -- / creation --
 st.sidebar.subheader("Team Meeting")

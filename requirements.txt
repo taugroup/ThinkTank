@@ -5,3 +5,9 @@ tiktoken
 python-docx
 reportlab
 markdown2
+chromadb
+langchain-ollama
+langchain_community
+langchain-text-splitters
+pypdf
+streamlit

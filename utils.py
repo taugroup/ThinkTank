@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, List
 import io
+import re
 
 from docx import Document
 from reportlab.lib.pagesizes import LETTER
@@ -13,6 +14,17 @@ import markdown2
 def now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+def clean_name(name: str, min_len: int = 3) -> str:
+    # replace invalid chars with _
+    clean = re.sub(r"[^A-Za-z0-9._-]", "_", name)
+    # collapse consecutive underscores / dots / dashes
+    clean = re.sub(r"[_\.-]{2,}", "_", clean)
+    # strip leading / trailing non-alphanumerics
+    clean = re.sub(r"^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "", clean)
+    # fallback if too short
+    if len(clean) < min_len:
+        clean = (clean + "___")[:min_len]
+    return clean[:512]
 
 def indent(text: str, pad: int = 2) -> str:
     prefix = " " * pad
