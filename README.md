@@ -1,6 +1,6 @@
 # ThinkTank – Agentic Research Simulation.
 
-**ThinkTank** is a fully local, agentic research platform that replicates the team-based architecture described in the paper:
+**ThinkTank** A Framework for Generalizing Domain-Specific AI Agent Systems into Universal Collaborative Intelligence Platforms
 
 > *The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*  
 > [Read the paper](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1)
@@ -13,20 +13,14 @@ This implementation simulates a scientific team made up of local LLM-based agent
 
 ThinkTank orchestrates collaborative research meetings between the following agents:
 
-- **Principal Investigator (PI)**  
+- **Coordinator**  
   Synthesizes all ideas, resolves debates, and produces final meeting summaries and project decisions.
 
-- **Scientific Critic**  
+- **Critical Thinker**  
   Points out flaws, inconsistencies, or gaps in reasoning, and demands scientific rigor.
 
 - **Dynamic Scientist Agents**  
-  Three scientists are created on-the-fly based on your project description. Each has a different role, expertise, and contribution style.
-
-### Meeting Types Supported
-
-- **Team Meetings**: All agents interact in multi-round discussions on a shared agenda.
-- **Individual Meetings**: One scientist is paired with the critic for focused work.
-- **Parallel + Merge**: Multiple creative meetings are run in parallel, and their results are merged into a single synthesis.
+  User can input any number of experts with their own vector stores which act as RAG based tool for the agent. Each has a different role, expertise, and contribution style.
 
 All meeting discussions and summaries are **stored in a local memory database** for future reference and summarization.
 
@@ -66,10 +60,10 @@ pip install -r requirements.txt
 ### 3. Run the script
 
 ```bash
-python main.py
+streamlit run app.py
 ```
 
-### 4. `meeting_transcript.txt` will contain the responses from all the agents.
+### 4. Meeting transcript can be downloaded as a DOCX file from the app.
 
 ---
 

@@ -7,7 +7,9 @@ import pypandoc
 pypandoc.download_pandoc()
 
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Inches, Pt
+
+import io
 
 MERMAID_BLOCK = re.compile(r"```mermaid(.*?)```", re.S)
 
@@ -53,7 +55,9 @@ def _docx_bytes(project_name: str,
     md_list = copy.deepcopy(md_text)        # never mutate caller’s list
     table_md = pd.DataFrame(scientists).to_markdown(index=False, tablefmt="pipe")
     md_list.insert(0, table_md)             # put table above any meeting notes
-
+    # Add watermark at the end of list
+    footer = (
+        f'---\n\n')
     body_md   = "\n\n".join(md_list)
     header_md = (
         f"# {project_name}\n\n"
@@ -61,7 +65,7 @@ def _docx_bytes(project_name: str,
         f"## {project_desc}\n\n"
         f"**Exported on:** {now()}\n"
     )
-    full_markdown = f"{header_md}\n\n{body_md}"
+    full_markdown = f"{header_md}\n\n{body_md}\n\n{footer}"
 
     images_dir = tempfile.mkdtemp()
     def _replace(match, counter=[0]):
@@ -84,6 +88,12 @@ def _docx_bytes(project_name: str,
                 for paragraph in cell.paragraphs:
                     for run in paragraph.runs:
                         run.font.size = Pt(table_font_size)
+    para = doc.add_paragraph()
+    run = para.add_run()
+    with open("assets/Logo_tau.png", "rb") as f: 
+        pic_bytes = f.read()
+    run.add_picture(io.BytesIO(pic_bytes), width=Inches(0.4))
+    para.add_run("   Developed by TAU Group").font.size = Pt(14)
 
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as out:
         out_path = out.name

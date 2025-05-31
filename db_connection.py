@@ -1,4 +1,3 @@
-# Singleton class to manage connection to ChromaDB
 import chromadb
 from logger import logger
 from chromadb.config import Settings

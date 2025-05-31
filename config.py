@@ -1,5 +1,5 @@
 LOG_DIR = "./logs"
-DB_PATH = "./chromadb"
+DB_PATH = "chroma_db"
 
 # Text splitter configurations
 CHUNK_SIZE = 1024

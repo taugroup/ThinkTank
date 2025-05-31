@@ -109,6 +109,8 @@ def run_thinktank_meeting(
 ):
     """Execute a team meeting and write transcript + summary back to database."""
 
+    st.session_state.markdown_log = []  # reset log for new meeting
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
         for scientist in st.session_state.rows:
@@ -148,6 +150,10 @@ def run_thinktank_meeting(
         for sci in lab.scientists:
 
             tool_prompt = f"""
+                You are an expert in a team meeting. Your task is to contribute to the discussion based on your expertise and the context provided.
+                DO NOT summarize or paraphrase the context, but use it to inform your response.
+                Generate a new response every time.
+
                 You have access to the following tool:
 
                 1.Tool: `retrieve_documents`
@@ -168,7 +174,7 @@ def run_thinktank_meeting(
             """
 
             resp = sci.run(
-                f"{tool_prompt}\nContext so far:\n{lab._context()}\n\nYour contribution for round {r}:",
+                f"{tool_prompt}\n\nGive your contribution for round {r}:",
                 stream=False,
             ).content
             lab._log("scientist", sci.name, resp)
@@ -274,10 +280,10 @@ project_desc = st.sidebar.text_area("Project description", value=project_data.ge
 # Scientist templates loaded from disk 
 TEMPLATES: List[Dict[str, str]] = _load_templates()
 
-st.sidebar.subheader("Scientist Manager")
+st.sidebar.subheader("Experts Manager")
 
 # Template management
-with st.sidebar.expander("Manage Scientists and templates", expanded=False):
+with st.sidebar.expander("Manage Experts and templates", expanded=False):
     # Select existing template to load
     selected_tpl_title = st.selectbox("Load template to edit", ["<new>"] + [t["title"] for t in TEMPLATES], key="tpl_select")
 
@@ -388,6 +394,7 @@ else:
     # Load existing meeting 
     sel_index = meeting_labels.index(meeting_choice)
     meeting = meetings[sel_index]
+    st.session_state.markdown_log = []
     st.markdown(f"## 🗂️ Meeting Record - {meeting['topic']}")
     st.session_state.markdown_log.append(f"## 🗂️ Meeting Record - {meeting['topic']}")
     for msg in meeting["transcript"]:

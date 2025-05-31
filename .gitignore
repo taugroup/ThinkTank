@@ -3,7 +3,7 @@ __*
 meeting_transcript.txt
 *.json
 .venv
-chromadb
+chroma_db
 logs
 .DS_Store
 pandoc-*
