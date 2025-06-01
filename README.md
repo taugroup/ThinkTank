@@ -2,8 +2,10 @@
 
 **ThinkTank** A Framework for Generalizing Domain-Specific AI Agent Systems into Universal Collaborative Intelligence Platforms
 
-> *The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*  
-> [Read the paper](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1)
+The ThinkTank framework draws inspiration from the collaborative AI methodologies demonstrated in *The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*  
+[Read the paper](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1), which showcased the effectiveness of multi-agent systems in scientific research and hypothesis generation.
+
+
 
 This implementation simulates a scientific team made up of local LLM-based agents, running fully offline via [Ollama](https://ollama.com) and powered by the `Llama3.1` model.
 
