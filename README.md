@@ -31,7 +31,6 @@ All meeting discussions and summaries are **stored in a local memory database** 
 ---
 
 ## Setup
-
 ### 1. Install Ollama and pull the model
 
 ```bash
