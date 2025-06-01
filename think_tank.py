@@ -29,7 +29,7 @@ class Message:
 class ThinkTank:
     """Exact meeting loop replica running on local ollama."""
 
-    def __init__(self, project_description: str, db_path: str = "ThinkTank.db") -> None:
+    def __init__(self, project_description: str, db_path: str = "ThinkTank.db", initialize = False) -> None:
         self.project_description = project_description
 
         # ── Persistent state ────────────────────────────────────────────────
@@ -43,7 +43,7 @@ class ThinkTank:
 
         # ── Core agents ─────────────────────────────────────────────────────
         self.pi = build_local_agent(
-            name="Principal Investigator",
+            name="Coordinator",
             description="Leads the project, resolves conflicts, synthesises insights.",
             role="Provide final recommendations and meeting summaries.",
             temperature=0.2,
@@ -53,7 +53,7 @@ class ThinkTank:
         )
 
         self.critic = build_local_agent(
-            name="Scientific Critic",
+            name="Critical Thinker",
             description="Spots logical flaws and methodological weaknesses.",
             role="Offer rigorous but constructive criticism.",
             temperature=0.3,
@@ -65,7 +65,8 @@ class ThinkTank:
         self._messages: List[Message] = []
 
         # Build initial scientists from the PI’s suggestion ------------------
-        self._init_scientists()
+        if initialize:
+            self._init_scientists()
 
     # ------------------------------------------------------------------
     # Agent generation

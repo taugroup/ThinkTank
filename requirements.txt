@@ -2,3 +2,16 @@ sqlalchemy
 ollama
 agno
 tiktoken
+python-docx
+reportlab
+markdown2
+chromadb
+langchain-ollama
+langchain_community
+langchain-text-splitters
+pypdf
+streamlit
+pypandoc
+pandas
+tabulate
+pypandoc
