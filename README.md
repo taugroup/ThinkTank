@@ -1,13 +1,10 @@
-# ThinkTank – Agentic Research Simulation.
+# ThinkTank – A Framework for Generalizing Domain-Specific AI Agent Systems into Universal Collaborative Intelligence Platforms
 
-**ThinkTank** A Framework for Generalizing Domain-Specific AI Agent Systems into Universal Collaborative Intelligence Platforms
-
-The ThinkTank framework draws inspiration from the collaborative AI methodologies demonstrated in *The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*  
-[Read the paper](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1), which showcased the effectiveness of multi-agent systems in scientific research and hypothesis generation.
+The ThinkTank framework draws inspiration from the collaborative AI methodologies demonstrated in [*The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1), which showcased the effectiveness of multi-agent systems in scientific research and hypothesis generation.
 
 
 
-This implementation simulates a scientific team made up of local LLM-based agents, running fully offline via [Ollama](https://ollama.com) and powered by the `Llama3.1` model.
+The implementation of ThinkTank simulates a scientific team made up of local LLM-based agents enhanced with documents provided by the user, running fully offline via [Ollama](https://ollama.com) and any LLM models supported by [Agno](https://www.agno.com/).
 
 ---
 
@@ -21,7 +18,7 @@ ThinkTank orchestrates collaborative research meetings between the following age
 - **Critical Thinker**  
   Points out flaws, inconsistencies, or gaps in reasoning, and demands scientific rigor.
 
-- **Dynamic Scientist Agents**  
+- **Domain Expert Agents**  
   User can input any number of experts with their own vector stores which act as RAG based tool for the agent. Each has a different role, expertise, and contribution style.
 
 All meeting discussions and summaries are **stored in a local memory database** for future reference and summarization.
