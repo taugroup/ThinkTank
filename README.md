@@ -55,6 +55,9 @@ source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# To handle mermaid code from LLMs
+npm install -g @mermaid-js/mermaid-cli
 ```
 
 ### 3. Run the script

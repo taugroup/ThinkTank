@@ -43,7 +43,7 @@ class ThinkTank:
 
         # ── Core agents ─────────────────────────────────────────────────────
         self.pi = build_local_agent(
-            name="Principal Investigator",
+            name="Coordinator",
             description="Leads the project, resolves conflicts, synthesises insights.",
             role="Provide final recommendations and meeting summaries.",
             temperature=0.2,
@@ -53,7 +53,7 @@ class ThinkTank:
         )
 
         self.critic = build_local_agent(
-            name="Scientific Critic",
+            name="Critical Thinker",
             description="Spots logical flaws and methodological weaknesses.",
             role="Offer rigorous but constructive criticism.",
             temperature=0.3,
