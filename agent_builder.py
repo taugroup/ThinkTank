@@ -15,7 +15,7 @@ def build_local_agent(
     enable_agentic_memory: bool = False,
     **extra_agent_kwargs,
 ) -> Agent:
-    """Return an Agent backed by a *local* deepseek‑r1:7b Ollama model."""
+    """Return an Agent backed by a *local* llama3.1:8b Ollama model."""
 
     model = Ollama(
         id="llama3.1",
