@@ -4,6 +4,8 @@ The ThinkTank framework draws inspiration from the collaborative AI methodologie
 
 The implementation of ThinkTank simulates a scientific team made up of local LLM-based agents enhanced with documents provided by the user, running fully offline via [Ollama](https://ollama.com) and any LLM models supported by [Agno](https://www.agno.com/).
 
+Please find the paper here: https://arxiv.org/abs/2506.02931
+
 ---
 
 ## 💡 What It Does
@@ -66,7 +68,16 @@ streamlit run app.py
 
 ---
 
-## Designer, Developer, Architect
-- Lead: Praneet Sai Madhu Surabhi, MS. Data Science '25, TAU Group
-- Developer: Dheeraj Mudireddy, MS. Data Science '25, TAU Group
+## Citation
+```text
+@article{surabhi2025thinktank,
+  title={ThinkTank: A Framework for Generalizing Domain-Specific AI Agent Systems into Universal Collaborative Intelligence Platforms},
+  author={Surabhi, Praneet Sai Madhu and Mudireddy, Dheeraj Reddy and Tao, Jian},
+  journal={arXiv preprint arXiv:2506.02931},
+  year={2025}
+}
+```
+
+## Team
+- Devs: {Praneet Sai Madhu Surabhi, Dheeraj Mudireddy}, MS. Data Science '25, TAU Group
 - Advisor: Prof. Dr. Jian Tao, Asst. Dir. of TAMIDS, Dir. of Digital Twin Lab
