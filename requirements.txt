@@ -15,3 +15,5 @@ pypandoc
 pandas
 tabulate
 pypandoc
+fastapi
+uvicorn
