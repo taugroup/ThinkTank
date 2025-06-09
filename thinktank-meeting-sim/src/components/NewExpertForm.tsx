@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,30 +8,43 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Expert } from '@/types';
+import {addExpertTemplate} from '../../api';
 
 const NewExpertForm = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const passedExpert = location.state?.expert as Expert | undefined;
+
   const [experts, setExperts] = useLocalStorage<Expert[]>('experts', []);
   const [title, setTitle] = useState('');
   const [role, setRole] = useState('');
   const [expertise, setExpertise] = useState('');
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState('')
+  
+  useEffect(() => {
+    if (passedExpert) {
+      setTitle(passedExpert.title);
+      setRole(passedExpert.role);
+      setExpertise(passedExpert.expertise);
+      setGoal(passedExpert.goal);
+    }
+  }, [passedExpert]);;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     const newExpert: Expert = {
-      id: Date.now().toString(),
       title,
       role,
       expertise,
-      goal,
-      files: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      goal
     };
 
     setExperts([...experts, newExpert]);
+    addExpertTemplate(newExpert).catch(error => {
+      console.error("Error adding expert template:", error);
+      // Optionally, show an error message to the user
+    });
     navigate('/experts');
   };
 

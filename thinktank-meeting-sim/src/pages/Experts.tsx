@@ -1,19 +1,47 @@
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from "react";
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Expert } from '@/types';
+import { getExpertTemplates, deleteExpertTemplate } from '../../api'
+import { get } from 'http';
 
 const Experts = () => {
-  const [experts, setExperts] = useLocalStorage<Expert[]>('experts', []);
+  const navigate = useNavigate();
+  const [experts, setExperts] = useState<Expert[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleDelete = (expertId: string) => {
+  useEffect(() => {
+    const fetchExperts = async () => {
+      try {
+        const rawExperts = await getExpertTemplates();
+        setExperts(rawExperts as Expert[]);
+      } catch (err) {
+        console.error("Failed to fetch projects", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchExperts();
+  }, []);
+
+  const handleDelete = (expertTitle: string) => {
     if (confirm('Are you sure you want to delete this expert?')) {
-      setExperts(experts.filter(expert => expert.id !== expertId));
+      deleteExpertTemplate(expertTitle).catch(error => {
+        console.error("Error deleting expert template:", error);
+        // Optionally, show an error message to the user
+      });
+      setExperts(experts.filter(expert => expert.title !== expertTitle));
     }
   };
+
+  const handleUpdateExpert = (expert: Expert) => {
+    navigate('/experts/new', { state: { expert } });
+  }
 
   return (
     <div className="space-y-6">
@@ -40,7 +68,7 @@ const Experts = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {experts.map((expert) => (
-            <div key={expert.id} className="border rounded-lg p-4 space-y-3">
+            <div key={expert.title} className="border rounded-lg p-4 space-y-3">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-medium">{expert.title}</h3>
@@ -51,13 +79,14 @@ const Experts = () => {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
+                    onClick={() => handleUpdateExpert(expert)}
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDelete(expert.id)}
+                    onClick={() => handleDelete(expert.title)}
                     className="h-8 w-8 text-destructive hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />

@@ -7,7 +7,7 @@ from typing import List
 from fastapi import FastAPI, WebSocket, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from models import MeetingRequest, Scientist, ProjectInfo
+from models import Meeting, Expert, Project
 from utils import load_projects, save_projects, load_templates, save_templates
 
 from ingestion import process_documents
@@ -34,14 +34,16 @@ TEMPLATES = load_templates()
 
 @app.get("/projects")
 async def list_projects():
-    return list(projects_db.keys())
+    obj = projects_db
+    print(obj)
+    return obj
 
 
 @app.post("/projects")
-async def create_project(name: str, info: ProjectInfo):
-    if name in projects_db:
+async def create_project(tpl: Project):
+    if tpl.title in projects_db:
         raise HTTPException(400, "Project already exists")
-    projects_db[name] = {"description": info.description, "scientists": [s.dict() for s in info.scientists], "meetings": []}
+    projects_db[tpl.title] = tpl.serialize()
     save_projects(projects_db)
     return {"msg": "created"}
 
@@ -58,7 +60,7 @@ async def get_templates():
 
 
 @app.post("/templates")
-async def upsert_template(tpl: Scientist):
+async def upsert_template(tpl: Expert):
     global TEMPLATES
     # remove existing with same title
     TEMPLATES = [t for t in TEMPLATES if t["title"] != tpl.title]
@@ -77,7 +79,7 @@ async def del_template(title: str):
 @app.websocket("/ws/meeting")
 async def meeting_ws(websocket: WebSocket):
     """
-    Client must first send a JSON payload with the MeetingRequest fields:
+    Client must first send a JSON payload with the Meeting fields:
     {
       "project_name": str,
       "project_desc": str,
@@ -92,7 +94,7 @@ async def meeting_ws(websocket: WebSocket):
     await websocket.accept()
     try:
         init = await websocket.receive_json()
-        req = MeetingRequest(**init)
+        req = Meeting(**init)
     except Exception:
         await websocket.close(code=1003)
         return

@@ -1,35 +1,26 @@
 
 export interface Expert {
-  id: string;
   title: string;
   role: string;
   expertise: string;
   goal: string;
-  files?: File[];
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface Project {
-  id: string;
   title: string;
   description: string;
-  experts: Expert[];
-  meetings: Meeting[];
-  createdAt: Date;
-  updatedAt: Date;
+  meetings?: Meeting[];
 }
 
 export interface Meeting {
   id: string;
-  projectId: string;
-  title: string;
+  projectTitle: string;
+  topic: string;
+  timestamp: BigInt
   rounds: number;
   transcript?: string;
-  status: 'pending' | 'running' | 'completed';
-  startedAt?: Date;
-  completedAt?: Date;
-  createdAt: Date;
+  summary?: string;
+  experts?: Expert[];
 }
 
 export interface FileUpload {

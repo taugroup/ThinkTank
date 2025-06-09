@@ -16,8 +16,7 @@ interface ExpertCardProps {
 const ExpertCard: React.FC<ExpertCardProps> = ({ 
   expert, 
   onEdit, 
-  onDelete, 
-  onUploadFiles 
+  onDelete
 }) => {
   return (
     <Card className="hover:shadow-lg transition-all duration-300 animate-fade-in">
@@ -39,7 +38,7 @@ const ExpertCard: React.FC<ExpertCardProps> = ({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => onDelete(expert.id)}
+              onClick={() => onDelete(expert.title)}
               className="h-8 w-8 text-destructive hover:text-destructive"
             >
               <Trash2 className="h-4 w-4" />
@@ -58,23 +57,6 @@ const ExpertCard: React.FC<ExpertCardProps> = ({
           <div>
             <h4 className="text-sm font-medium text-foreground mb-1">Goal</h4>
             <p className="text-sm text-muted-foreground">{expert.goal}</p>
-          </div>
-          
-          <div className="flex items-center justify-between pt-2">
-            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-              <FileText className="h-4 w-4" />
-              <span>{expert.files?.length || 0} files</span>
-            </div>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onUploadFiles(expert.id)}
-              className="flex items-center space-x-2"
-            >
-              <Upload className="h-4 w-4" />
-              <span>Upload Files</span>
-            </Button>
           </div>
         </div>
       </CardContent>

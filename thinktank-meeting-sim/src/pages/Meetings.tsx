@@ -21,7 +21,7 @@ const Meetings = () => {
   };
 
   const getProjectName = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
+    const project = projects.find(p => p.title === projectId);
     return project?.title || 'Unknown Project';
   };
 
@@ -52,17 +52,11 @@ const Meetings = () => {
           {meetings.map((meeting) => (
             <div key={meeting.id} className="border border-border rounded-lg p-4 flex items-center justify-between bg-card">
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-foreground">{meeting.title}</h3>
-                  <Badge variant={getStatusColor(meeting.status)} className="bg-secondary text-secondary-foreground">
-                    {meeting.status}
-                  </Badge>
-                </div>
                 <p className="text-sm text-muted-foreground">
-                  Project: {getProjectName(meeting.projectId)} • {meeting.rounds} rounds
+                  Project: {getProjectName(meeting.projectTitle)} • {meeting.rounds} rounds
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Created: {new Date(meeting.createdAt).toLocaleDateString()}
+                  Created: {new Date(Number(meeting.timestamp)).toLocaleDateString()}
                 </p>
               </div>
               <div className="flex gap-2">

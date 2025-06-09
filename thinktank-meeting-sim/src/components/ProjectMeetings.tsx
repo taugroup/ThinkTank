@@ -12,8 +12,8 @@ const ProjectMeetings = () => {
   const [meetings] = useLocalStorage<Meeting[]>('meetings', []);
   const [projects] = useLocalStorage<Project[]>('projects', []);
   
-  const project = projects.find(p => p.id === projectId);
-  const projectMeetings = meetings.filter(meeting => meeting.projectId === projectId);
+  const project = projects.find(p => p.title === projectId);
+  const projectMeetings = meetings.filter(meeting => meeting.projectTitle === projectId);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -64,17 +64,11 @@ const ProjectMeetings = () => {
           {projectMeetings.map((meeting) => (
             <div key={meeting.id} className="border border-border rounded-lg p-4 flex items-center justify-between bg-card">
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-foreground">{meeting.title}</h3>
-                  <Badge variant={getStatusColor(meeting.status)} className="bg-secondary text-secondary-foreground">
-                    {meeting.status}
-                  </Badge>
-                </div>
                 <p className="text-sm text-muted-foreground">
                   {meeting.rounds} rounds
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Created: {new Date(meeting.createdAt).toLocaleDateString()}
+                  Created: {new Date(Number(meeting.timestamp)).toLocaleDateString()}
                 </p>
               </div>
               <div className="flex gap-2">

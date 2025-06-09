@@ -14,8 +14,7 @@ interface ProjectCardProps {
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
-  const [meetings] = useLocalStorage<Meeting[]>('meetings', []);
-  const projectMeetings = meetings.filter(meeting => meeting.projectId === project.id);
+  const projectMeetings = project.meetings ?? [];
 
   return (
     <Card className="hover:bg-accent/50 transition-colors bg-card border-border">
@@ -34,19 +33,9 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
       </CardHeader>
       
       <CardContent className="pt-0 space-y-4">
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <Users className="h-3 w-3" />
-            <span>{project.experts.length}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            <span>{new Date(project.createdAt).toLocaleDateString()}</span>
-          </div>
-        </div>
         
         <div className="flex gap-2">
-          <Link to={`/projects/${project.id}/meetings`} className="flex-1">
+          <Link to={`/projects/${project.title}/meetings`} className="flex-1">
             <Button variant="outline" size="sm" className="w-full flex items-center gap-2 border-border text-foreground hover:bg-accent">
               <Eye className="h-3 w-3" />
               View Meetings

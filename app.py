@@ -16,7 +16,7 @@ from think_tank import ThinkTank
 from utils import export_meeting, clean_name
 from agno.memory.v2 import UserMemory
 
-DB_FILE = Path("projects_db.json")
+DB_FILE = Path("projects_db copy.json")
 TEMPLATE_FILE = Path("scientist_templates.json")
 
 def img_to_base64(path):

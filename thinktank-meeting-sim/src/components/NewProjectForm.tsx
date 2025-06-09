@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Project } from '@/types';
+import { addProject } from '../../api'; 
 
 const NewProjectForm = () => {
   const navigate = useNavigate();
@@ -18,15 +19,14 @@ const NewProjectForm = () => {
     e.preventDefault();
     
     const newProject: Project = {
-      id: Date.now().toString(),
       title,
       description,
-      experts: [],
-      meetings: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      meetings: []
     };
-
+    addProject(newProject).catch(error => {
+      console.error("Error adding project:", error);
+      // Optionally, show an error message to the user
+    });
     setProjects([...projects, newProject]);
     navigate('/projects');
   };

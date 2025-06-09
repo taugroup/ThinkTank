@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,11 +10,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Expert, Meeting, Project } from '@/types';
 import { Upload, X } from 'lucide-react';
+import { getProjects, getExpertTemplates } from '../../api'; 
+import { get } from 'http';
 
 const NewMeetingForm = () => {
   const navigate = useNavigate();
-  const [projects] = useLocalStorage<Project[]>('projects', []);
-  const [experts] = useLocalStorage<Expert[]>('experts', []);
+  const [projects, setProjects] = useState<Record<string, Project>>({});
+  const [experts, setExperts] = useState<Expert[]>([]);
+  const [loading, setLoading] = useState(true);
+
+
   const [meetings, setMeetings] = useLocalStorage<Meeting[]>('meetings', []);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [title, setTitle] = useState('');
@@ -23,10 +28,26 @@ const NewMeetingForm = () => {
   const [files, setFiles] = useState<Record<string, FileList>>({});
   const [expertToAdd, setExpertToAdd] = useState<string>('');
 
+  useEffect(() => {
+    const fetchProjectsAndExperts = async () => {
+      try {
+        const rawProjects = await getProjects();
+        setProjects(rawProjects as Record<string, Project>);
+        const rawExperts = await getExpertTemplates();
+        setExperts(rawExperts as Expert[]);
+      } catch (err) {
+        console.error("Failed to fetch projects or experts", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProjectsAndExperts();
+  }, []);
+
   const handleAddExpert = () => {
     if (expertToAdd) {
-      const expert = experts.find(e => e.id === expertToAdd);
-      if (expert && !selectedExperts.find(e => e.id === expert.id)) {
+      const expert = experts.find(e => e.title === expertToAdd);
+      if (expert && !selectedExperts.find(e => e.title === expert.title)) {
         setSelectedExperts([...selectedExperts, expert]);
       }
       setExpertToAdd('');
@@ -34,7 +55,7 @@ const NewMeetingForm = () => {
   };
 
   const handleRemoveExpert = (expertId: string) => {
-    setSelectedExperts(selectedExperts.filter(e => e.id !== expertId));
+    setSelectedExperts(selectedExperts.filter(e => e.title !== expertId));
     const newFiles = { ...files };
     delete newFiles[expertId];
     setFiles(newFiles);
@@ -51,11 +72,10 @@ const NewMeetingForm = () => {
     
     const newMeeting: Meeting = {
       id: Date.now().toString(),
-      projectId: selectedProjectId,
-      title,
+      projectTitle: selectedProjectId,
+      topic: title,
       rounds,
-      status: 'pending',
-      createdAt: new Date(),
+      timestamp: BigInt(Date.now())
     };
 
     setMeetings([...meetings, newMeeting]);
@@ -63,7 +83,7 @@ const NewMeetingForm = () => {
   };
 
   const availableExperts = experts.filter(expert => 
-    !selectedExperts.find(selected => selected.id === expert.id)
+    !selectedExperts.find(selected => selected.title === expert.title)
   );
 
   return (
@@ -81,11 +101,11 @@ const NewMeetingForm = () => {
                   <SelectValue placeholder="Choose a project" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover border-border">
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id} className="text-popover-foreground">
-                      {project.title}
-                    </SelectItem>
-                  ))}
+                {Object.values(projects).map((project) => (
+                  <SelectItem key={project.title} value={project.title} className="text-popover-foreground">
+                    {project.title}
+                  </SelectItem>
+                ))}
                 </SelectContent>
               </Select>
             </div>
@@ -128,7 +148,7 @@ const NewMeetingForm = () => {
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
                     {availableExperts.map((expert) => (
-                      <SelectItem key={expert.id} value={expert.id} className="text-popover-foreground">
+                      <SelectItem key={expert.title} value={expert.title} className="text-popover-foreground">
                         {expert.title} - {expert.role}
                       </SelectItem>
                     ))}
@@ -159,7 +179,7 @@ const NewMeetingForm = () => {
                     </TableHeader>
                     <TableBody>
                       {selectedExperts.map((expert) => (
-                        <TableRow key={expert.id} className="border-border">
+                        <TableRow key={expert.title} className="border-border">
                           <TableCell className="text-foreground font-medium">{expert.title}</TableCell>
                           <TableCell className="text-foreground">{expert.role}</TableCell>
                           <TableCell className="text-foreground">{expert.expertise}</TableCell>
@@ -170,14 +190,14 @@ const NewMeetingForm = () => {
                                 type="file"
                                 accept=".pdf"
                                 multiple
-                                onChange={(e) => handleFileUpload(expert.id, e.target.files)}
+                                onChange={(e) => handleFileUpload(expert.title, e.target.files)}
                                 className="bg-input border-border text-foreground file:text-foreground text-xs"
                               />
                               <Upload className="h-4 w-4 text-muted-foreground" />
                             </div>
-                            {files[expert.id] && (
+                            {files[expert.title] && (
                               <p className="text-xs text-muted-foreground mt-1">
-                                {files[expert.id].length} file(s) selected
+                                {files[expert.title].length} file(s) selected
                               </p>
                             )}
                           </TableCell>
@@ -186,7 +206,7 @@ const NewMeetingForm = () => {
                               type="button"
                               variant="destructive"
                               size="sm"
-                              onClick={() => handleRemoveExpert(expert.id)}
+                              onClick={() => handleRemoveExpert(expert.title)}
                               className="h-8 w-8 p-0"
                             >
                               <X className="h-4 w-4" />
@@ -205,7 +225,7 @@ const NewMeetingForm = () => {
                 </p>
               )}
               
-              {projects.length === 0 && (
+              {Object.keys(projects).length === 0 && (
                 <p className="text-muted-foreground text-center py-8">
                   No projects available. Create a project first in Project Manager.
                 </p>
