@@ -1,0 +1,9 @@
+*.db
+__*
+meeting_transcript.txt
+*.json
+.venv
+chroma_db
+logs
+.DS_Store
+pandoc-*
