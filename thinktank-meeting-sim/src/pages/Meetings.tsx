@@ -11,15 +11,6 @@ const Meetings = () => {
   const [meetings] = useLocalStorage<Meeting[]>('meetings', []);
   const [projects] = useLocalStorage<Project[]>('projects', []);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'default';
-      case 'running': return 'destructive';
-      case 'pending': return 'secondary';
-      default: return 'secondary';
-    }
-  };
-
   const getProjectName = (projectId: string) => {
     const project = projects.find(p => p.title === projectId);
     return project?.title || 'Unknown Project';

@@ -8,25 +8,25 @@ class Expert(BaseModel):
     role: str
 
 class Meeting(BaseModel):
-    id: str
-    projectTitle: str;
-    topic: str;
+    project_name: str
+    experts: List[Expert]
+    vector_store: List[List[str]]  # List of base64-encoded file bytes
+    meeting_topic: str
+    rounds: int
     timestamp: int
-    rounds: int;
-    transcript: str;
-    summary: str;
-    experts: List[Expert];
+    transcript: List[Dict[str, str]]  # List of strings representing the transcript
+    summary: str
 
     def serialize(self) -> Dict[str, Any]:
         return {
-            "id": self.id,
-            "projectTitle": self.projectTitle,
-            "topic": self.topic,
-            "timestamp": self.timestamp,
+            "project_name": self.project_name,
+            "experts": [expert.dict() for expert in self.experts],
+            "vector_store": self.vector_store,
+            "meeting_topic": self.meeting_topic,
             "rounds": self.rounds,
+            "timestamp": self.timestamp,
             "transcript": self.transcript,
-            "summary": self.summary,
-            "experts": [expert.dict() for expert in self.experts]
+            "summary": self.summary
         }
 
 

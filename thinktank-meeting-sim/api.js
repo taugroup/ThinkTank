@@ -100,23 +100,3 @@ export const deleteExpertTemplate = async (name) => {
         return { success: false };
     }
 };
-
-// POST function to run a simulation step
-export const runSimulationStep = async (meeting_request) => {
-    try {
-        const response = await fetch(`${BASE_URL}/ws/meeting`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(step),
-        });
-        if (!response.ok) {
-            throw new Error('Failed to run simulation step');
-        }
-        return await response.json();
-    } catch (error) {
-        console.error('Error running simulation step:', error);
-        return { success: false };
-    }
-};

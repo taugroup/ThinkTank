@@ -82,8 +82,7 @@ async def meeting_ws(websocket: WebSocket):
     Client must first send a JSON payload with the Meeting fields:
     {
       "project_name": str,
-      "project_desc": str,
-      "scientists": [ {title, expertise, goal, role}, ... ],
+      "experts": [ {title, expertise, goal, role}, ... ],
       "vector_store": [[<base64_file_bytes>, ...]],  # optional, if files are uploaded
       "meeting_topic": str,
       "rounds": int
@@ -94,8 +93,13 @@ async def meeting_ws(websocket: WebSocket):
     await websocket.accept()
     try:
         init = await websocket.receive_json()
+        init['timestamp'] = int(time.time())
+        init['transcript'] = []
+        init['summary'] = ""
+        print("Received init JSON:", init)
         req = Meeting(**init)
-    except Exception:
+    except Exception as e:
+        print("Error parsing init JSON or Meeting model:", e)
         await websocket.close(code=1003)
         return
     
@@ -104,7 +108,7 @@ async def meeting_ws(websocket: WebSocket):
     # 1) ingest documents in parallel
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
-        for i, sci in enumerate(req.scientists):
+        for i, sci in enumerate(req.experts):
             files = req.vector_store[i] if i < len(req.vector_store) else []
 
             futures.append(executor.submit(process_documents, files, clean_name(sci.title)))
@@ -113,11 +117,11 @@ async def meeting_ws(websocket: WebSocket):
                 f.result()
             except Exception as e:
                 await websocket.send_json({"name": "ingestion", "content": f"Error: {e}"})
-    
-    lab = ThinkTank(req.project_desc)
+    project_desc = projects_db[req.project_name]["description"]
+    lab = ThinkTank(project_desc)
     lab.scientists.clear()
     tools = [retrieve_documents]
-    for sd in req.scientists:
+    for sd in req.experts:
         lab.scientists.append(
             build_local_agent(
                 name=sd.title,
@@ -134,16 +138,18 @@ async def meeting_ws(websocket: WebSocket):
     async def stream(name: str, content: str):
         await websocket.send_json({"name": name, "content": content})
         lab._log("stream", name, content)
+    
+    await stream('# 🧑‍🔬 Team Meeting', f'## {req.meeting_topic}')
 
     # PI opening
     pi_open = lab.pi.run(
-        f"You are convening a team meeting. Agenda: {req.meeting_topic}. Share initial guidance to the scientists..",
+        f"You are convening a team meeting. Agenda: {req.meeting_topic}. Share initial guidance to the experts..",
         stream=False,
     ).content
     await stream(lab.pi.name, pi_open)
     # discussion rounds
     for r in range(1, req.rounds + 1):
-        await websocket.send_json({"content": f"## Round {r}/{req.rounds}"})
+        await websocket.send_json({"name": f"## Round {r}/{req.rounds}"})
         transcript.append({"subheading": f"Round {r}/{req.rounds}"})
         for sci in lab.scientists:
             tool_prompt = f"""
@@ -170,7 +176,7 @@ async def meeting_ws(websocket: WebSocket):
                 Your goal is to leverage the retrieved knowledge to solve the task accurately and completely.
             """
             resp = sci.run(tool_prompt, stream=False).content
-            await stream(sci.name, resp)
+            await stream(f'### sci.name', resp)
             transcript.append({"name": sci.name, "content": resp})
         
         crit = lab.critic.run(f"Context so far:\n{lab._context()}\nCritique round {r}", stream=False).content
@@ -189,18 +195,20 @@ async def meeting_ws(websocket: WebSocket):
         # persist memory & save project
     lab._memory.add_user_memory(memory=UserMemory(memory=summary), user_id=req.project_name)
     proj = projects_db.setdefault(req.project_name, {
-        "description": req.project_desc,
-        "scientists": [s.dict() for s in req.scientists],
+        "title": req.project_name,
+        "description": project_desc,
         "meetings": []
     })
-    proj["description"] = req.project_desc
-    proj["scientists"] = [s.dict() for s in req.scientists]
+    proj["description"] = project_desc
     proj["meetings"].append({
-        "timestamp": int(time.time()),
-        "topic": req.meeting_topic,
+        "project_name": req.project_name,
+        "experts": [s.dict() for s in req.experts],
+        "vector_store": [],
+        "meeting_topic": req.meeting_topic,
         "rounds": req.rounds,
-        "summary": summary,
+        "timestamp": int(time.time()),
         "transcript": transcript,
+        "summary": summary,
     })
     save_projects(projects_db)
 

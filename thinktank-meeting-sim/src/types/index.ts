@@ -24,10 +24,6 @@ export interface Meeting {
 }
 
 export interface FileUpload {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
   expertId: string;
-  uploadedAt: Date;
+  files: String[];
 }

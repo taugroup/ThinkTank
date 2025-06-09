@@ -17,6 +17,7 @@ const NewMeetingForm = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Record<string, Project>>({});
   const [experts, setExperts] = useState<Expert[]>([]);
+  const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(true);
 
 
@@ -67,7 +68,7 @@ const NewMeetingForm = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const newMeeting: Meeting = {
@@ -78,8 +79,43 @@ const NewMeetingForm = () => {
       timestamp: BigInt(Date.now())
     };
 
+    const encodeFiles = async (): Promise<string[][]> => {
+      const result: string[][] = [];
+      for (const expert of selectedExperts) {
+        const fileList = files[expert.title];
+        if (!fileList || fileList.length === 0) {
+          result.push([]);
+          continue;
+        }
+
+        const fileArray: string[] = [];
+        for (const file of Array.from(fileList)) {
+          const base64 = await file.arrayBuffer().then(buffer =>
+            btoa(String.fromCharCode(...new Uint8Array(buffer)))
+          );
+          fileArray.push(base64);
+        }
+        result.push(fileArray);
+      }
+      return result;
+    };
+
+    const vectorStore = await encodeFiles();
+    const meetingRequest = {
+      project_name: selectedProjectId,
+      experts: selectedExperts.map(e => ({
+        title: e.title,
+        expertise: e.expertise,
+        goal: e.goal,
+        role: e.role
+      })),
+      vector_store: vectorStore,
+      meeting_topic: title,
+      rounds: rounds
+    };
+
     setMeetings([...meetings, newMeeting]);
-    navigate('/projects');
+    navigate('/meeting-stream', { state: { meetingRequest, meetingId: newMeeting.id } });
   };
 
   const availableExperts = experts.filter(expert => 

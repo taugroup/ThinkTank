@@ -13,6 +13,7 @@ import NewExpertForm from "@/components/NewExpertForm";
 import NewMeetingForm from "@/components/NewMeetingForm";
 import NotFound from "./pages/NotFound";
 import ProjectMeetings from "@/components/ProjectMeetings";
+import MeetingStream from "./components/MeetingStream";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/experts/new" element={<NewExpertForm />} />
             <Route path="/meetings" element={<Meetings />} />
             <Route path="/meetings/new" element={<NewMeetingForm />} />
+            <Route path="/meeting-stream" element={<MeetingStream />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
