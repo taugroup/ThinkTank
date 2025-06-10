@@ -16,7 +16,7 @@ export interface Meeting {
   id: string;
   projectTitle: string;
   topic: string;
-  timestamp: BigInt
+  timestamp: number
   rounds: number;
   transcript?: string;
   summary?: string;

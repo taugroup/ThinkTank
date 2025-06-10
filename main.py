@@ -3,6 +3,7 @@ import time
 import base64
 import concurrent.futures
 from typing import List
+import asyncio
 
 from fastapi import FastAPI, WebSocket, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +32,19 @@ app.add_middleware(
 # In-memory caches (backed by JSON files)
 projects_db = load_projects()
 TEMPLATES = load_templates()
+
+def clean_think_tags(text: str) -> str:
+    """
+    Cleans the text by removing 'Think' tags and their content.
+    
+    Args:
+        text (str): The input text to clean.
+        
+    Returns:
+        str: The cleaned text without 'Think' tags.
+    """
+    cleaned_text = text.replace("Think", "").replace("```", "")
+    return cleaned_text
 
 @app.get("/projects")
 async def list_projects():
@@ -104,7 +118,18 @@ async def meeting_ws(websocket: WebSocket):
         return
     
     transcript = []
-    
+
+    # helper to stream and log
+    async def stream(name: str, content: str):
+        """Helper to send a message and log it."""
+        try:
+            print(f"Attempting to stream: {name}") # Add a log here
+            await websocket.send_json({"name": name, "content": content})
+            print(f"Successfully streamed: {name}") # And a success log
+            lab._log("stream", name, content)
+        except Exception as e:
+            # This will catch ANY error during the send operation
+            print(f"!!!!!! FAILED to send stream message for '{name}'. Error: {e} !!!!!!")
     # 1) ingest documents in parallel
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
@@ -132,24 +157,24 @@ async def meeting_ws(websocket: WebSocket):
                 tools=tools,
             )
         )
+    print('Starting meeting for project:', req.project_name)
+    await stream(f"Starting meeting for project: {req.project_name}", "")
+    await asyncio.sleep(0.01)
     transcript.append({"heading": f"🧑‍🔬 Team Meeting - {req.meeting_topic}"})
-
-    # helper to stream and log
-    async def stream(name: str, content: str):
-        await websocket.send_json({"name": name, "content": content})
-        lab._log("stream", name, content)
-    
     await stream('# 🧑‍🔬 Team Meeting', f'## {req.meeting_topic}')
+    await asyncio.sleep(0.01)
 
     # PI opening
     pi_open = lab.pi.run(
         f"You are convening a team meeting. Agenda: {req.meeting_topic}. Share initial guidance to the experts..",
         stream=False,
     ).content
-    await stream(lab.pi.name, pi_open)
+    await stream(lab.pi.name, clean_think_tags(pi_open))
+    await asyncio.sleep(0.01)
     # discussion rounds
     for r in range(1, req.rounds + 1):
-        await websocket.send_json({"name": f"## Round {r}/{req.rounds}"})
+        await stream(f"## Round {r}/{req.rounds}", "")
+        await asyncio.sleep(0.01)
         transcript.append({"subheading": f"Round {r}/{req.rounds}"})
         for sci in lab.scientists:
             tool_prompt = f"""
@@ -176,20 +201,29 @@ async def meeting_ws(websocket: WebSocket):
                 Your goal is to leverage the retrieved knowledge to solve the task accurately and completely.
             """
             resp = sci.run(tool_prompt, stream=False).content
-            await stream(f'### sci.name', resp)
+            print(f"Expert {sci.name} response: {resp}")
+            resp = clean_think_tags(resp)
+            await stream(f'{sci.name}', resp)
+            await asyncio.sleep(0.01)
             transcript.append({"name": sci.name, "content": resp})
         
         crit = lab.critic.run(f"Context so far:\n{lab._context()}\nCritique round {r}", stream=False).content
+        crit = clean_think_tags(crit)
         await stream(lab.critic.name, crit)
+        await asyncio.sleep(0.01)
         transcript.append({"name": lab.critic.name, "content": crit})
 
         synth = lab.pi.run(f"Context so far:\n{lab._context()}\nSynthesise round {r} and pose follow-ups.", stream=False).content
+        synth = clean_think_tags(synth)
         await stream(f"{lab.pi.name} (synthesis)", synth)
+        await asyncio.sleep(0.01)
         transcript.append({"name": f"{lab.pi.name} (Feedback)", "content": synth})
 
         # final summary
         summary = lab.pi.run(f"Context so far:\n{lab._context()}\nProvide the final detailed meeting summary and recommendations.", stream=False).content
+        summary = clean_think_tags(summary)
         await stream("FINAL_SUMMARY", summary)
+        await asyncio.sleep(0.01)
         transcript.append({"name": "FINAL SUMMARY", "content": summary})
 
         # persist memory & save project
@@ -214,4 +248,5 @@ async def meeting_ws(websocket: WebSocket):
 
     # signal end
     await websocket.send_json({"name": "__end__", "content": "Meeting complete"})
+    await asyncio.sleep(0.01)
     await websocket.close()

@@ -76,7 +76,7 @@ const NewMeetingForm = () => {
       projectTitle: selectedProjectId,
       topic: title,
       rounds,
-      timestamp: BigInt(Date.now())
+      timestamp: Number(Date.now())
     };
 
     const encodeFiles = async (): Promise<string[][]> => {

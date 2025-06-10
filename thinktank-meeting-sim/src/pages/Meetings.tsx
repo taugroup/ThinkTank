@@ -1,20 +1,38 @@
 
 import React from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Eye } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Meeting, Project } from '@/types';
+import { getProjects } from '../../api';
 
 const Meetings = () => {
-  const [meetings] = useLocalStorage<Meeting[]>('meetings', []);
-  const [projects] = useLocalStorage<Project[]>('projects', []);
+  const [projects, setProjects] = useState<Record<string, Project>>({});
+  const [loading, setLoading] = useState(true);
 
-  const getProjectName = (projectId: string) => {
-    const project = projects.find(p => p.title === projectId);
-    return project?.title || 'Unknown Project';
-  };
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const rawProjects = await getProjects();
+        setProjects(rawProjects as Record<string, Project>);
+      } catch (err) {
+        console.error("Failed to fetch projects", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
+
+  const raw_meetings = projects ? Object.values(projects).flatMap(project => project.meetings ?? []) : [];
+  const meetings = raw_meetings as Meeting[];
+  
+
+  if (loading) return <p>Loading...</p>;
 
   return (
     <div className="space-y-6">
@@ -44,7 +62,7 @@ const Meetings = () => {
             <div key={meeting.id} className="border border-border rounded-lg p-4 flex items-center justify-between bg-card">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">
-                  Project: {getProjectName(meeting.projectTitle)} • {meeting.rounds} rounds
+                  Project: {meeting.project_name} • {meeting.rounds} rounds
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Created: {new Date(Number(meeting.timestamp)).toLocaleDateString()}

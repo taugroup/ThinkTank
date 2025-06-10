@@ -1,11 +1,13 @@
 
 import React from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar, Users, Eye, Plus } from 'lucide-react';
 import { Project } from '@/types';
+import { getProjectByName } from '../../api';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Meeting } from '@/types';
 
@@ -14,7 +16,49 @@ interface ProjectCardProps {
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
-  const projectMeetings = project.meetings ?? [];
+  const project_title = project.title;
+  const [project_new, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Ensure project_title is available before fetching
+    if (!project_title) {
+      setLoading(false);
+      setError("No project title provided in URL.");
+      return;
+    }
+
+    const fetchProject = async () => {
+      try {
+        setLoading(true);
+        const data = await getProjectByName(project_title);
+        // 3. Set the project state with the returned data
+        setProject(data); 
+      } catch (err) {
+        console.error("Failed to fetch project", err);
+        setError("Could not load project details. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProject();
+  }, [project_title]);
+
+  if (loading) {
+    return <p className="text-center mt-8">Loading project details...</p>;
+  }
+
+  // Handle error state
+  if (error) {
+    return <p className="text-center mt-8 text-red-500">{error}</p>;
+  }
+
+  // Handle case where project was not found after loading
+  if (!project) {
+    return <p className="text-center mt-8">Project not found.</p>;
+  }
+  const projectMeetings = project_new.meetings || [];
 
   return (
     <Card className="hover:bg-accent/50 transition-colors bg-card border-border">

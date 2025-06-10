@@ -1,28 +1,61 @@
 
 import React from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Eye, ArrowLeft } from 'lucide-react';
+import { getProjectByName } from '../../api';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { Meeting, Project } from '@/types';
 
 const ProjectMeetings = () => {
-  const { projectId } = useParams<{ projectId: string }>();
-  const [meetings] = useLocalStorage<Meeting[]>('meetings', []);
-  const [projects] = useLocalStorage<Project[]>('projects', []);
-  
-  const project = projects.find(p => p.title === projectId);
-  const projectMeetings = meetings.filter(meeting => meeting.projectTitle === projectId);
+  const { projectTitle } = useParams<{ projectTitle: string }>();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'default';
-      case 'running': return 'destructive';
-      case 'pending': return 'secondary';
-      default: return 'secondary';
+  // 2. Set up state to hold the full project object, which starts as `null`.
+  const [project, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Make sure we have the title before trying to fetch.
+    if (!projectTitle) {
+      setError("No project specified.");
+      setLoading(false);
+      return;
     }
-  };
+    const fetchProjectData = async () => {
+      try {
+        setLoading(true);
+        // 3. Use the identifier to fetch the full project object.
+        const fetchedProject = await getProjectByName(projectTitle);
+        setProject(fetchedProject);
+      } catch (err) {
+        console.error("Failed to fetch project:", err);
+        setError("Could not load the project.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjectData();
+  }, [projectTitle]);
+
+  if (loading) {
+    return <p>Loading project...</p>;
+  }
+
+  if (error) {
+    return <p className="text-red-500">{error}</p>;
+  }
+
+  // If loading is done and there's still no project, it wasn't found.
+  if (!project) {
+    return <p>Project not found.</p>;
+  }
+
+  const projectMeetings = project.meetings || [];
+
 
   if (!project) {
     return (

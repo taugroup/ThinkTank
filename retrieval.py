@@ -5,7 +5,7 @@ from db_connection import ChromaDBConnection
 from typing import List, Tuple
 from config import DB_PATH, HNSW_SPACE
 from ingestion import get_embeddings
-import streamlit as st
+# import streamlit as st
 
 def retrieve_documents(queries: List[str], collection_name: str) -> List[str]:
     """
@@ -42,14 +42,20 @@ def retrieve_documents(queries: List[str], collection_name: str) -> List[str]:
 
     docs = collection.get(ids=top_ids, include=["documents", "metadatas"])
     dense_results = [ {'text': doc_text, 'source': metadata['source']}  for _, doc_text, metadata in zip(top_ids, docs["documents"], docs["metadatas"])]
-    logger.info(f"Retrieved {dense_results} documents from collection '{collection_name}'.")
+    logger.info(f"Retrieved {len(dense_results)} documents from collection '{collection_name}'.")
 
     #Display unique sources in Streamlit app
     unique_sources = set(result['source'] for result in dense_results)
-    st.markdown(f"### References from collection: {collection_name}:")
-    st.session_state.markdown_log.append("### References:")
-    for source in unique_sources:
-        st.markdown(f"- {source}")
-        st.session_state.markdown_log.append(f"- {source}")
+    # st.markdown(f"### References from collection: {collection_name}:")
+    # st.session_state.markdown_log.append("### References:")
+    # for source in unique_sources:
+    #     st.markdown(f"- {source}")
+    #     st.session_state.markdown_log.append(f"- {source}")
+
+    # websocket.send_json({'name': 'Retrieved Documents', 'content': f"Retrieved {len(dense_results)} documents from collection '{collection_name}'."})
+    # for source in unique_sources:
+    #     websocket.send_json({'name': f'- {source}', 'content': ''})
+
+
     dense_results = [result['text'] for result in dense_results]
     return dense_results
