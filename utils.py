@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Any
 import tempfile
 import re, os, copy, shutil, subprocess, tempfile
 import pandas as pd
@@ -10,6 +10,37 @@ from docx import Document
 from docx.shared import Inches, Pt
 
 import io
+import json
+from pathlib import Path
+
+PROJECTS_FILE = Path("projects_db.json")
+TEMPLATES_FILE = Path("scientist_templates.json")
+
+def load_projects() -> Dict[str, Any]:
+    if PROJECTS_FILE.exists():
+        return json.loads(PROJECTS_FILE.read_text())
+    return {}
+
+def save_projects(data: Dict[str, Any]):
+    PROJECTS_FILE.write_text(json.dumps(data, indent=2))
+
+def load_templates() -> List[Dict[str, str]]:
+    if TEMPLATES_FILE.exists():
+        return json.loads(TEMPLATES_FILE.read_text())
+    # initialize defaults if missing
+    defaults = [
+        {"title": "Immunologist", "expertise": "Immunopathology, antibody-antigen interactions",
+         "goal": "Guide immune-targeting strategies", "role": "Analyse epitope selection and immune response"},
+        {"title": "Machine Learning Expert", "expertise": "Deep learning, protein sequence modelling",
+         "goal": "Develop predictive models for design", "role": "Build & chain ML models to rank candidates"},
+        {"title": "Computational Biologist", "expertise": "Protein folding simulation, molecular dynamics",
+         "goal": "Validate structural stability", "role": "Simulate docking & refine structures"}
+    ]
+    TEMPLATES_FILE.write_text(json.dumps(defaults, indent=2))
+    return defaults
+
+def save_templates(templates: List[Dict[str, str]]):
+    TEMPLATES_FILE.write_text(json.dumps(templates, indent=2))
 
 MERMAID_BLOCK = re.compile(r"```mermaid(.*?)```", re.S)
 

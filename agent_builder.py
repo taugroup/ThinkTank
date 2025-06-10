@@ -18,7 +18,7 @@ def build_local_agent(
     """Return an Agent backed by a *local* llama3.1:8b Ollama model."""
 
     model = Ollama(
-        id="llama3.1",
+        id="qwen3:8b",
         options={"temperature": temperature},
     )
 

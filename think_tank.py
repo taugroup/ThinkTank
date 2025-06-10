@@ -54,7 +54,7 @@ class ThinkTank:
 
         self.critic = build_local_agent(
             name="Critical Thinker",
-            description="Spots logical flaws and methodological weaknesses.",
+            description="Spot logical flaws and methodological weaknesses.",
             role="Offer rigorous but constructive criticism.",
             temperature=0.3,
             memory=self._memory,
