@@ -73,8 +73,8 @@ const NewMeetingForm = () => {
     
     const newMeeting: Meeting = {
       id: Date.now().toString(),
-      projectTitle: selectedProjectId,
-      topic: title,
+      project_name: selectedProjectId,
+      meeting_topic: title,
       rounds,
       timestamp: Number(Date.now())
     };

@@ -122,6 +122,7 @@ async def meeting_ws(websocket: WebSocket):
     # helper to stream and log
     async def stream(name: str, content: str):
         """Helper to send a message and log it."""
+        transcript.append({"name": name, "content": content})
         try:
             print(f"Attempting to stream: {name}") # Add a log here
             await websocket.send_json({"name": name, "content": content})
@@ -160,7 +161,7 @@ async def meeting_ws(websocket: WebSocket):
     print('Starting meeting for project:', req.project_name)
     await stream(f"Starting meeting for project: {req.project_name}", "")
     await asyncio.sleep(0.01)
-    transcript.append({"heading": f"🧑‍🔬 Team Meeting - {req.meeting_topic}"})
+    # transcript.append({"heading": f"🧑‍🔬 Team Meeting - {req.meeting_topic}"})
     await stream('# 🧑‍🔬 Team Meeting', f'## {req.meeting_topic}')
     await asyncio.sleep(0.01)
 
@@ -175,7 +176,7 @@ async def meeting_ws(websocket: WebSocket):
     for r in range(1, req.rounds + 1):
         await stream(f"## Round {r}/{req.rounds}", "")
         await asyncio.sleep(0.01)
-        transcript.append({"subheading": f"Round {r}/{req.rounds}"})
+        # transcript.append({"subheading": f"Round {r}/{req.rounds}"})
         for sci in lab.scientists:
             tool_prompt = f"""
                 You are an expert in a team meeting. Your task is to contribute to the discussion based on your expertise and the context provided.
@@ -205,26 +206,26 @@ async def meeting_ws(websocket: WebSocket):
             resp = clean_think_tags(resp)
             await stream(f'{sci.name}', resp)
             await asyncio.sleep(0.01)
-            transcript.append({"name": sci.name, "content": resp})
+            # transcript.append({"name": sci.name, "content": resp})
         
         crit = lab.critic.run(f"Context so far:\n{lab._context()}\nCritique round {r}", stream=False).content
         crit = clean_think_tags(crit)
         await stream(lab.critic.name, crit)
         await asyncio.sleep(0.01)
-        transcript.append({"name": lab.critic.name, "content": crit})
+        # transcript.append({"name": lab.critic.name, "content": crit})
 
         synth = lab.pi.run(f"Context so far:\n{lab._context()}\nSynthesise round {r} and pose follow-ups.", stream=False).content
         synth = clean_think_tags(synth)
-        await stream(f"{lab.pi.name} (synthesis)", synth)
+        await stream(f"{lab.pi.name} (Feedback)", synth)
         await asyncio.sleep(0.01)
-        transcript.append({"name": f"{lab.pi.name} (Feedback)", "content": synth})
+        # transcript.append({"name": f"{lab.pi.name} (Feedback)", "content": synth})
 
         # final summary
         summary = lab.pi.run(f"Context so far:\n{lab._context()}\nProvide the final detailed meeting summary and recommendations.", stream=False).content
         summary = clean_think_tags(summary)
-        await stream("FINAL_SUMMARY", summary)
+        await stream("** FINAL SUMMARY **", summary)
         await asyncio.sleep(0.01)
-        transcript.append({"name": "FINAL SUMMARY", "content": summary})
+        # transcript.append({"name": "FINAL SUMMARY", "content": summary})
 
         # persist memory & save project
     lab._memory.add_user_memory(memory=UserMemory(memory=summary), user_id=req.project_name)

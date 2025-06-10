@@ -69,10 +69,12 @@ const Meetings = () => {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex items-center gap-2 border-border text-foreground hover:bg-accent">
-                  <Eye className="h-4 w-4" />
-                  View
-                </Button>
+                <Link to={`/meeting/${meeting.project_name}/${meeting.meeting_topic}`}>
+                  <Button variant="outline" size="sm" className="flex items-center gap-2 border-border text-foreground hover:bg-accent">
+                    <Eye className="h-4 w-4" />
+                    View
+                  </Button>
+                </Link>
               </div>
             </div>
           ))}

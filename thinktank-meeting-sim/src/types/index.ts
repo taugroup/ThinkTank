@@ -14,11 +14,11 @@ export interface Project {
 
 export interface Meeting {
   id: string;
-  projectTitle: string;
-  topic: string;
+  project_name: string;
+  meeting_topic: string;
   timestamp: number
   rounds: number;
-  transcript?: string;
+  transcript?: [{ name: string; content: string }];
   summary?: string;
   experts?: Expert[];
 }

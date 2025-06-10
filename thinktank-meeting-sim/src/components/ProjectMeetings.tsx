@@ -55,7 +55,7 @@ const ProjectMeetings = () => {
   }
 
   const projectMeetings = project.meetings || [];
-
+  console.log("Project meetings:", projectMeetings);
 
   if (!project) {
     return (
@@ -98,6 +98,9 @@ const ProjectMeetings = () => {
             <div key={meeting.id} className="border border-border rounded-lg p-4 flex items-center justify-between bg-card">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">
+                  • {meeting.meeting_topic}
+                </p>
+                <p className="text-sm text-muted-foreground">
                   {meeting.rounds} rounds
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -105,10 +108,12 @@ const ProjectMeetings = () => {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex items-center gap-2 border-border text-foreground hover:bg-accent">
-                  <Eye className="h-4 w-4" />
-                  View
-                </Button>
+                <Link to={`/meeting/${projectTitle}/${meeting.meeting_topic}`}>
+                  <Button variant="outline" size="sm" className="flex items-center gap-2 border-border text-foreground hover:bg-accent">
+                    <Eye className="h-4 w-4" />
+                    View
+                  </Button>
+                </Link>
               </div>
             </div>
           ))}
