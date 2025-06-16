@@ -62,7 +62,11 @@ const Meetings = () => {
             <div key={meeting.id} className="border border-border rounded-lg p-4 flex items-center justify-between bg-card">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">
-                  Project: {meeting.project_name} • {meeting.rounds} rounds
+                  Project: {meeting.project_name} 
+                  <br />
+                  • {meeting.meeting_topic} 
+                  <br />
+                  • {meeting.rounds} rounds 
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Created: {new Date(Number(meeting.timestamp)).toLocaleDateString()}

@@ -7,3 +7,4 @@ chroma_db
 logs
 .DS_Store
 pandoc-*
+.deepeval/

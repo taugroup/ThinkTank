@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { Expert, Meeting, Project } from '@/types';
+import { Expert, Meeting, Project, FileData } from '@/types';
 import { Upload, X } from 'lucide-react';
 import { getProjects, getExpertTemplates } from '../../api'; 
 import { get } from 'http';
@@ -79,8 +79,8 @@ const NewMeetingForm = () => {
       timestamp: Number(Date.now())
     };
 
-    const encodeFiles = async (): Promise<string[][]> => {
-      const result: string[][] = [];
+    const encodeFiles = async (): Promise<Array<Array<{filename: string, content: string}>>> => {
+      const result: Array<Array<{filename: string, content: string}>> = [];
       for (const expert of selectedExperts) {
         const fileList = files[expert.title];
         if (!fileList || fileList.length === 0) {
@@ -88,12 +88,15 @@ const NewMeetingForm = () => {
           continue;
         }
 
-        const fileArray: string[] = [];
+        const fileArray: Array<{filename: string, content: string}> = [];
         for (const file of Array.from(fileList)) {
           const base64 = await file.arrayBuffer().then(buffer =>
             btoa(String.fromCharCode(...new Uint8Array(buffer)))
           );
-          fileArray.push(base64);
+          fileArray.push({
+            filename: file.name,
+            content: base64
+          });
         }
         result.push(fileArray);
       }

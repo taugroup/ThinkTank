@@ -1,5 +1,9 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
+
+class FileData(BaseModel):
+    filename: str
+    content: str  # base64-encoded file content
 
 class Expert(BaseModel):
     title: str
@@ -10,12 +14,12 @@ class Expert(BaseModel):
 class Meeting(BaseModel):
     project_name: str
     experts: List[Expert]
-    vector_store: List[List[str]]  # List of base64-encoded file bytes
+    vector_store: List[List[FileData]]  # List of lists of file data objects
     meeting_topic: str
     rounds: int
-    timestamp: int
-    transcript: List[Dict[str, str]]  # List of strings representing the transcript
-    summary: str
+    timestamp: Optional[int] = None
+    transcript: Optional[List[Dict[str, str]]] = []  # List of strings representing the transcript
+    summary: Optional[str] = ""
 
     def serialize(self) -> Dict[str, Any]:
         return {

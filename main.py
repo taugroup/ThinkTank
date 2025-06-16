@@ -2,13 +2,14 @@ import json
 import time
 import base64
 import concurrent.futures
+import re
 from typing import List
 import asyncio
 
 from fastapi import FastAPI, WebSocket, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from models import Meeting, Expert, Project
+from models import Meeting, Expert, Project, FileData
 from utils import load_projects, save_projects, load_templates, save_templates
 
 from ingestion import process_documents
@@ -35,15 +36,23 @@ TEMPLATES = load_templates()
 
 def clean_think_tags(text: str) -> str:
     """
-    Cleans the text by removing 'Think' tags and their content.
+    Cleans the text by removing '<think>...</think>' tags and their content.
     
     Args:
         text (str): The input text to clean.
         
     Returns:
-        str: The cleaned text without 'Think' tags.
+        str: The cleaned text without think tags and their content.
     """
-    cleaned_text = text.replace("Think", "").replace("```", "")
+    # Use regex to remove <think>...</think> tags and everything inside them
+    # The pattern uses non-greedy matching (.*?) to avoid matching across multiple think blocks
+    # The re.DOTALL flag allows . to match newlines as well
+    cleaned_text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Clean up extra whitespace that might be left behind
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text)  # Replace multiple consecutive whitespace with single space
+    cleaned_text = cleaned_text.strip()  # Remove leading/trailing whitespace
+    
     return cleaned_text
 
 @app.get("/projects")
@@ -97,10 +106,11 @@ async def meeting_ws(websocket: WebSocket):
     {
       "project_name": str,
       "experts": [ {title, expertise, goal, role}, ... ],
-      "vector_store": [[<base64_file_bytes>, ...]],  # optional, if files are uploaded
+      "vector_store": [[{filename: str, content: str}, ...]],  # optional, if files are uploaded
       "meeting_topic": str,
       "rounds": int
     }
+    Where vector_store contains arrays of file objects with base64-encoded content.
     Then the server will stream every log line as JSON messages:
     { "name": <agent_name>, "content": <text> }
     """
@@ -120,12 +130,12 @@ async def meeting_ws(websocket: WebSocket):
     transcript = []
 
     # helper to stream and log
-    async def stream(name: str, content: str):
+    async def stream(name: str, content: str, round = None):
         """Helper to send a message and log it."""
-        transcript.append({"name": name, "content": content})
+        transcript.append({"name": name, "content": content, round: round})
         try:
             print(f"Attempting to stream: {name}") # Add a log here
-            await websocket.send_json({"name": name, "content": content})
+            await websocket.send_json({"name": name, "content": content, round: round})
             print(f"Successfully streamed: {name}") # And a success log
             lab._log("stream", name, content)
         except Exception as e:
@@ -135,9 +145,22 @@ async def meeting_ws(websocket: WebSocket):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
         for i, sci in enumerate(req.experts):
-            files = req.vector_store[i] if i < len(req.vector_store) else []
+            file_data_list = req.vector_store[i] if i < len(req.vector_store) else []
+            
+            # Convert base64 file data to (filename, bytes) tuples
+            file_bytes_list = []
+            for file_data in file_data_list:
+                try:
+                    # Decode base64 content to bytes
+                    pdf_bytes = base64.b64decode(file_data.content)
+                    file_bytes_list.append((file_data.filename, pdf_bytes))
+                except Exception as e:
+                    await websocket.send_json({"name": "ingestion", "content": f"Error decoding file {file_data.filename}: {e}"})
+                    continue
 
-            futures.append(executor.submit(process_documents, files, clean_name(sci.title)))
+            if file_bytes_list:
+                futures.append(executor.submit(process_documents, file_bytes_list, clean_name(sci.title)))
+            
         for f in concurrent.futures.as_completed(futures):
             try:
                 f.result()
@@ -180,6 +203,10 @@ async def meeting_ws(websocket: WebSocket):
         for sci in lab.scientists:
             tool_prompt = f"""
                 You are an expert in a team meeting. Your task is to contribute to the discussion based on your expertise and the context provided.
+                Title: {sci.name}
+                Description: {sci.description}
+                Role: {sci.role}
+                Context so far:\n{lab._context()}\n\n
                 DO NOT summarize or paraphrase the context, but use it to inform your response.
                 Generate a new response every time.
 
@@ -200,6 +227,9 @@ async def meeting_ws(websocket: WebSocket):
                     - **Do not output the summary or paraphrase the retrieved content — use it as-is.**
 
                 Your goal is to leverage the retrieved knowledge to solve the task accurately and completely.
+
+                The meeting until now: 
+                {lab._context()}
             """
             resp = sci.run(tool_prompt, stream=False).content
             print(f"Expert {sci.name} response: {resp}")

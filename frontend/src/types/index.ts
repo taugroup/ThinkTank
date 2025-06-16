@@ -1,4 +1,9 @@
 
+export interface FileData {
+  filename: string;
+  content: string; // base64-encoded file content
+}
+
 export interface Expert {
   title: string;
   role: string;
@@ -25,5 +30,5 @@ export interface Meeting {
 
 export interface FileUpload {
   expertId: string;
-  files: String[];
+  files: string[];
 }

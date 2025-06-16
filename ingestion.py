@@ -1,4 +1,5 @@
-import os, tempfile
+import os
+import tempfile
 import multiprocessing as mp
 from logger import logger
 from db_connection import ChromaDBConnection
@@ -26,7 +27,19 @@ def _loader_from_bytes(pdf_bytes: bytes) -> PyPDFLoader:
         return PyPDFLoader(tmp.name) 
 
 def process_documents(file_bytes_list, collection_name):
+    """
+    Process a list of (filename, pdf_bytes) tuples and index them in ChromaDB.
+    
+    Args:
+        file_bytes_list: List of tuples (filename, pdf_bytes)
+        collection_name: Name of the ChromaDB collection
+    """
     logger.info(f"Indexing {len(file_bytes_list)} documents for collection: {collection_name}")
+    
+    if not file_bytes_list:
+        logger.info(f"No documents to process for collection: {collection_name}")
+        return
+    
     total_batches = 0
 
     text_splitter = RecursiveCharacterTextSplitter(
@@ -37,12 +50,21 @@ def process_documents(file_bytes_list, collection_name):
 
     db = ChromaDBConnection(DB_PATH)
     collection = db.get_collection(collection_name, {"hnsw:space": HNSW_SPACE})
-    logger
+    
     for filename, pdf_bytes in file_bytes_list:
         try:
+            logger.info(f"Processing document: {filename}")
+            
+            # Validate that pdf_bytes is actually bytes
+            if not isinstance(pdf_bytes, bytes):
+                logger.error(f"Expected bytes for {filename}, got {type(pdf_bytes)}")
+                continue
+                
             loader = _loader_from_bytes(pdf_bytes)
             pages = loader.load()
             chunks = text_splitter.split_documents(pages)
+            
+            logger.info(f"Extracted {len(chunks)} chunks from {filename}")
 
             documents, metadatas, ids = [], [], []
             for i, chunk in enumerate(chunks):
@@ -56,13 +78,16 @@ def process_documents(file_bytes_list, collection_name):
                     collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
                     documents, metadatas, ids = [], [], []
                     total_batches += 1
+                    logger.info(f"Processed batch {total_batches} for {filename}")
 
             if documents:
                 embeddings = [embedding_model.embed_query(d) for d in documents]
                 collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
                 total_batches += 1
+                logger.info(f"Processed final batch for {filename}")
 
         except Exception as e:
             logger.error(f"Error processing {filename}: {e}")
+            raise  # Re-raise to let the caller handle it
 
-    logger.info(f"Finished {total_batches} batches for {collection_name}")
+    logger.info(f"Finished processing {total_batches} batches for {collection_name}")
