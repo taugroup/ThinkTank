@@ -4,6 +4,11 @@ export interface FileData {
   content: string; // base64-encoded file content
 }
 
+export interface FileReference {
+  original_name: string;
+  size: number;
+}
+
 export interface Expert {
   title: string;
   role: string;

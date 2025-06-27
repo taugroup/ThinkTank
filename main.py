@@ -3,13 +3,16 @@ import time
 import base64
 import concurrent.futures
 import re
+import os
+import tempfile
+import uuid
 from typing import List
 import asyncio
 
-from fastapi import FastAPI, WebSocket, UploadFile, File, HTTPException
+from fastapi import FastAPI, WebSocket, UploadFile, File, HTTPException, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from models import Meeting, Expert, Project, FileData
+from models import Meeting, Expert, Project, FileData, FileReference
 from utils import load_projects, save_projects, load_templates, save_templates
 
 from ingestion import process_documents
@@ -33,6 +36,11 @@ app.add_middleware(
 # In-memory caches (backed by JSON files)
 projects_db = load_projects()
 TEMPLATES = load_templates()
+
+# File storage for uploaded PDFs
+UPLOAD_DIR = "uploaded_files"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+file_storage = {}  # Maps session_id -> {expert_name: [(filename, file_path), ...]}
 
 def clean_think_tags(text: str) -> str:
     """
@@ -91,13 +99,75 @@ async def upsert_template(tpl: Expert):
     save_templates(TEMPLATES)
     return {"msg": "saved"}
 
-
 @app.delete("/templates/{title}")
 async def del_template(title: str):
     global TEMPLATES
     TEMPLATES = [t for t in TEMPLATES if t["title"] != title]
     save_templates(TEMPLATES)
     return {"msg": "deleted"}
+
+
+@app.post("/upload-files/{session_id}/{expert_name}")
+async def upload_files(session_id: str, expert_name: str, files: List[UploadFile] = File(...)):
+    """
+    Upload PDF files for a specific expert in a meeting session.
+    Returns file references that can be used in the WebSocket meeting.
+    """
+    try:
+        if session_id not in file_storage:
+            file_storage[session_id] = {}
+        
+        if expert_name not in file_storage[session_id]:
+            file_storage[session_id][expert_name] = []
+        
+        uploaded_files = []
+        for file in files:
+            if not file.filename.lower().endswith('.pdf'):
+                raise HTTPException(400, f"Only PDF files are allowed. Got: {file.filename}")
+            
+            # Generate unique filename to avoid conflicts
+            unique_filename = f"{uuid.uuid4()}_{file.filename}"
+            file_path = os.path.join(UPLOAD_DIR, unique_filename)
+            
+            # Save file to disk
+            with open(file_path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+            
+            # Store file reference
+            file_storage[session_id][expert_name].append((file.filename, file_path))
+            uploaded_files.append({
+                "original_name": file.filename,
+                "size": len(content)
+            })
+        
+        return {
+            "session_id": session_id,
+            "expert_name": expert_name,
+            "files": uploaded_files,
+            "message": f"Successfully uploaded {len(files)} files"
+        }
+    
+    except Exception as e:
+        raise HTTPException(500, f"File upload failed: {str(e)}")
+
+@app.delete("/files/{session_id}")
+async def cleanup_session_files(session_id: str):
+    """Clean up files for a session"""
+    if session_id in file_storage:
+        # Delete physical files
+        for expert_files in file_storage[session_id].values():
+            for _, file_path in expert_files:
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass  # File might already be deleted
+        
+        # Remove from storage
+        del file_storage[session_id]
+        return {"message": "Session files cleaned up"}
+    
+    return {"message": "Session not found"}
 
 @app.websocket("/ws/meeting")
 async def meeting_ws(websocket: WebSocket):
@@ -114,59 +184,179 @@ async def meeting_ws(websocket: WebSocket):
     Then the server will stream every log line as JSON messages:
     { "name": <agent_name>, "content": <text> }
     """
+    print(f"WebSocket connection attempt from: {websocket.client}")
     await websocket.accept()
+    print("WebSocket connection accepted successfully!")
+    
+    # Add a small delay to ensure connection is fully established
+    await asyncio.sleep(0.1)
+    
     try:
-        init = await websocket.receive_json()
+        print("Waiting for initial JSON payload...")
+        # Add a timeout to the receive operation
+        init = await asyncio.wait_for(websocket.receive_json(), timeout=30.0)
+        print(f"Received JSON payload with keys: {list(init.keys())}")
+        
+        # Check payload size
+        vector_store = init.get('vector_store', [])
+        total_files = sum(len(expert_files) for expert_files in vector_store)
+        print(f"Total files to process: {total_files}")
+        
+        if total_files > 0:
+            # Estimate payload size
+            total_size = 0
+            for expert_files in vector_store:
+                for file_data in expert_files:
+                    if isinstance(file_data, dict) and 'content' in file_data:
+                        total_size += len(file_data['content'])
+            print(f"Estimated payload size: {total_size / (1024*1024):.2f} MB")
+        
+        # Add optional fields if missing
         init['timestamp'] = int(time.time())
         init['transcript'] = []
         init['summary'] = ""
-        print("Received init JSON:", init)
+        
+        # Validate the Meeting model
+        print("Creating Meeting model...")
         req = Meeting(**init)
+        print("Meeting model created successfully!")
+        
+        # Debug: Print what we received
+        print(f"Session ID: {getattr(req, 'session_id', 'None')}")
+        print(f"File references: {getattr(req, 'file_references', 'None')}")
+        print(f"Vector store: {getattr(req, 'vector_store', 'None')}")
+        print(f"File storage keys: {list(file_storage.keys())}")
+        if req.session_id and req.session_id in file_storage:
+            print(f"Files in session {req.session_id}: {file_storage[req.session_id]}")
+        
+    except asyncio.TimeoutError:
+        print("Timeout waiting for initial JSON payload")
+        try:
+            await websocket.send_json({"name": "error", "content": "Timeout waiting for initial data"})
+        except:
+            pass
+        await websocket.close(code=1008)
+        return
+    except WebSocketDisconnect as e:
+        print(f"WebSocket disconnected during initialization: {e}")
+        return  # Don't try to send anything to a disconnected socket
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {e}")
+        try:
+            await websocket.send_json({"name": "error", "content": f"Invalid JSON format: {e}"})
+        except:
+            pass  # Socket might already be closed
+        await websocket.close(code=1003)
+        return
+    except ValueError as e:
+        print(f"Meeting model validation error: {e}")
+        try:
+            await websocket.send_json({"name": "error", "content": f"Invalid meeting data: {e}"})
+        except:
+            pass  # Socket might already be closed
+        await websocket.close(code=1003)
+        return
     except Exception as e:
-        print("Error parsing init JSON or Meeting model:", e)
+        print(f"Unexpected error parsing init JSON or Meeting model: {e}")
+        print(f"Error type: {type(e)}")
+        try:
+            await websocket.send_json({"name": "error", "content": f"Server error: {e}"})
+        except:
+            pass  # Socket might already be closed
         await websocket.close(code=1003)
         return
     
     transcript = []
+    
+    # Initialize lab early to avoid NameError in stream function
+    project_desc = projects_db.get(req.project_name, {}).get("description", "")
+    lab = ThinkTank(project_desc)
 
     # helper to stream and log
     async def stream(name: str, content: str, round = None):
         """Helper to send a message and log it."""
-        transcript.append({"name": name, "content": content, round: round})
+        transcript.append({"name": name, "content": content, "round": round})
         try:
-            print(f"Attempting to stream: {name}") # Add a log here
-            await websocket.send_json({"name": name, "content": content, round: round})
-            print(f"Successfully streamed: {name}") # And a success log
+            print(f"Attempting to stream: {name}")
+            await websocket.send_json({"name": name, "content": content, "round": round})
+            print(f"Successfully streamed: {name}")
             lab._log("stream", name, content)
         except Exception as e:
-            # This will catch ANY error during the send operation
             print(f"!!!!!! FAILED to send stream message for '{name}'. Error: {e} !!!!!!")
     # 1) ingest documents in parallel
+    await stream("System", "Starting document ingestion...")
+    
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
         for i, sci in enumerate(req.experts):
-            file_data_list = req.vector_store[i] if i < len(req.vector_store) else []
-            
-            # Convert base64 file data to (filename, bytes) tuples
+            # Handle both new file reference system and legacy base64 system
             file_bytes_list = []
-            for file_data in file_data_list:
-                try:
-                    # Decode base64 content to bytes
-                    pdf_bytes = base64.b64decode(file_data.content)
-                    file_bytes_list.append((file_data.filename, pdf_bytes))
-                except Exception as e:
-                    await websocket.send_json({"name": "ingestion", "content": f"Error decoding file {file_data.filename}: {e}"})
-                    continue
+            
+            # New system: file references
+            if req.session_id and req.session_id in file_storage:
+                expert_files = file_storage[req.session_id].get(sci.title, [])
+                print(f"Found {len(expert_files)} files for expert {sci.title} in session {req.session_id}")
+                for original_name, file_path in expert_files:
+                    try:
+                        with open(file_path, 'rb') as f:
+                            pdf_bytes = f.read()
+                        file_bytes_list.append((original_name, pdf_bytes))
+                        print(f"Loaded file from disk: {original_name} ({len(pdf_bytes)} bytes)")
+                    except Exception as e:
+                        error_msg = f"Error loading file {original_name}: {e}"
+                        print(error_msg)
+                        await websocket.send_json({"name": "ingestion", "content": error_msg})
+                        continue
+            
+            # Legacy system: base64 files (fallback)
+            elif hasattr(req, 'vector_store') and req.vector_store and i < len(req.vector_store):
+                file_data_list = req.vector_store[i]
+                print(f"Processing {len(file_data_list)} base64 files for expert {sci.title}")
+                for file_data in file_data_list:
+                    try:
+                        # Decode base64 content to bytes
+                        pdf_bytes = base64.b64decode(file_data.content)
+                        file_bytes_list.append((file_data.filename, pdf_bytes))
+                        print(f"Successfully decoded file: {file_data.filename} ({len(pdf_bytes)} bytes)")
+                    except Exception as e:
+                        error_msg = f"Error decoding file {file_data.filename}: {e}"
+                        print(error_msg)
+                        await websocket.send_json({"name": "ingestion", "content": error_msg})
+                        continue
+            else:
+                print(f"No files found for expert {sci.title}")
 
             if file_bytes_list:
+                print(f"Submitting {len(file_bytes_list)} files for processing for expert: {sci.title}")
                 futures.append(executor.submit(process_documents, file_bytes_list, clean_name(sci.title)))
+            else:
+                print(f"No files to process for expert: {sci.title}")
             
-        for f in concurrent.futures.as_completed(futures):
-            try:
-                f.result()
-            except Exception as e:
-                await websocket.send_json({"name": "ingestion", "content": f"Error: {e}"})
-    project_desc = projects_db[req.project_name]["description"]
+        # Wait for all document processing to complete
+        if futures:
+            await stream("System", f"Processing {len(futures)} document collections...")
+            for f in concurrent.futures.as_completed(futures):
+                try:
+                    f.result()
+                    print("Document processing completed successfully")
+                except Exception as e:
+                    error_msg = f"Document processing error: {e}"
+                    print(error_msg)
+                    await websocket.send_json({"name": "ingestion", "content": error_msg})
+        else:
+            print("No document collections to process")
+        
+    await stream("System", "Document ingestion completed!")
+    
+    # Ensure we have a valid project description
+    if req.project_name not in projects_db:
+        error_msg = f"Project '{req.project_name}' not found"
+        print(error_msg)
+        await websocket.send_json({"name": "error", "content": error_msg})
+        await websocket.close(code=1003)
+        return
+        
+    # Update lab with the correct project description
     lab = ThinkTank(project_desc)
     lab.scientists.clear()
     tools = [retrieve_documents]
@@ -193,7 +383,7 @@ async def meeting_ws(websocket: WebSocket):
         f"You are convening a team meeting. Agenda: {req.meeting_topic}. Share initial guidance to the experts..",
         stream=False,
     ).content
-    await stream(lab.pi.name, clean_think_tags(pi_open))
+    await stream(lab.pi.name, clean_think_tags(pi_open), round=0)
     await asyncio.sleep(0.01)
     # discussion rounds
     for r in range(1, req.rounds + 1):
@@ -234,27 +424,27 @@ async def meeting_ws(websocket: WebSocket):
             resp = sci.run(tool_prompt, stream=False).content
             print(f"Expert {sci.name} response: {resp}")
             resp = clean_think_tags(resp)
-            await stream(f'{sci.name}', resp)
+            await stream(f'{sci.name}', resp, round = r)
             await asyncio.sleep(0.01)
             # transcript.append({"name": sci.name, "content": resp})
         
         crit = lab.critic.run(f"Context so far:\n{lab._context()}\nCritique round {r}", stream=False).content
         crit = clean_think_tags(crit)
-        await stream(lab.critic.name, crit)
+        await stream(lab.critic.name, crit, round=r)
         await asyncio.sleep(0.01)
         # transcript.append({"name": lab.critic.name, "content": crit})
 
         synth = lab.pi.run(f"Context so far:\n{lab._context()}\nSynthesise round {r} and pose follow-ups.", stream=False).content
         synth = clean_think_tags(synth)
-        await stream(f"{lab.pi.name} (Feedback)", synth)
+        await stream(f"{lab.pi.name} (Feedback)", synth, round=r)
         await asyncio.sleep(0.01)
         # transcript.append({"name": f"{lab.pi.name} (Feedback)", "content": synth})
 
-        # final summary
-        summary = lab.pi.run(f"Context so far:\n{lab._context()}\nProvide the final detailed meeting summary and recommendations.", stream=False).content
-        summary = clean_think_tags(summary)
-        await stream("** FINAL SUMMARY **", summary)
-        await asyncio.sleep(0.01)
+    # final summary
+    summary = lab.pi.run(f"Context so far:\n{lab._context()}\nProvide the final detailed meeting summary and recommendations.", stream=False).content
+    summary = clean_think_tags(summary)
+    await stream("** FINAL SUMMARY **", summary)
+    await asyncio.sleep(0.01)
         # transcript.append({"name": "FINAL SUMMARY", "content": summary})
 
         # persist memory & save project

@@ -5,6 +5,10 @@ class FileData(BaseModel):
     filename: str
     content: str  # base64-encoded file content
 
+class FileReference(BaseModel):
+    original_name: str
+    size: int
+
 class Expert(BaseModel):
     title: str
     expertise: str
@@ -14,11 +18,13 @@ class Expert(BaseModel):
 class Meeting(BaseModel):
     project_name: str
     experts: List[Expert]
-    vector_store: List[List[FileData]]  # List of lists of file data objects
+    vector_store: Optional[List[List[FileData]]] = []  # Legacy support for base64 files
+    file_references: Optional[Dict[str, List[FileReference]]] = {}  # New: expert_name -> file_references
+    session_id: Optional[str] = None  # For file upload sessions
     meeting_topic: str
     rounds: int
     timestamp: Optional[int] = None
-    transcript: Optional[List[Dict[str, str]]] = []  # List of strings representing the transcript
+    transcript: Optional[List[Dict[str, str]]] = []
     summary: Optional[str] = ""
 
     def serialize(self) -> Dict[str, Any]:

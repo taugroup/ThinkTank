@@ -26,8 +26,16 @@ const MeetingStream = () => {
         socket.onopen = () => {
             console.log('WebSocket connection established.');
             setStatus('Connection open. Starting meeting...');
-            // Send the payload now that the connection is confirmed open.
-            socket.send(JSON.stringify(meetingRequestRef.current));
+            
+            // Send the payload (now much smaller without file data)
+            try {
+                const payload = JSON.stringify(meetingRequestRef.current);
+                socket.send(payload);
+                console.log('Meeting request sent successfully');
+            } catch (error) {
+                console.error('Error sending payload:', error);
+                setStatus('Error sending data...');
+            }
           };
     
         socket.onmessage = (event) => {
@@ -49,12 +57,29 @@ const MeetingStream = () => {
     
         socket.onerror = (err) => {
             console.error('WebSocket error:', err);
-            setStatus('Error occurred. Please try again later.');
+            console.error('Error event details:', {
+                type: err.type,
+                target: err.target,
+                isTrusted: err.isTrusted
+            });
+            setStatus('Connection error occurred. Check console for details.');
         };
     
         socket.onclose = (event) => {
-            console.log('WebSocket closed.', event.reason);
-            setStatus('Disconnected.');
+            console.log('WebSocket closed:', {
+                code: event.code,
+                reason: event.reason,
+                wasClean: event.wasClean
+            });
+            
+            if (event.code === 1006) {
+                setStatus('Connection lost unexpectedly. The server may have rejected the data.');
+            } else if (event.code === 1003) {
+                setStatus('Server rejected the data format.');
+            } else {
+                setStatus(`Disconnected (Code: ${event.code})`);
+            }
+            
             // Clean up the ref when the socket closes
             socketRef.current = null;
           };

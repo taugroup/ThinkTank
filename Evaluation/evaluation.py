@@ -140,7 +140,7 @@ class Qwen3MeetingEvaluationManager:
             4. Coherence: Does the conversation flow logically from one agent to the next?
             5. Redundancy Avoidance: Do agents avoid repeating information unnecessarily?
             
-            Rate from 1-10 where 10 is excellent collaboration.
+            Rate from 1-100 where 100 is excellent collaboration.
             """,
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
@@ -161,7 +161,7 @@ class Qwen3MeetingEvaluationManager:
             3. Knowledge Source Usage: Does the agent appropriately reference their expertise?
             4. Goal Alignment: Are the agent's responses aligned with their stated goals?
             
-            Rate from 1-10 where 10 is perfect role adherence.
+            Rate from 1-100 where 100 is perfect role adherence.
             """,
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
@@ -183,7 +183,7 @@ class Qwen3MeetingEvaluationManager:
             4. Clarity and Structure: Is the response well-organized and easy to follow?
             5. Actionability: Does the response provide practical, implementable information?
             
-            Rate from 1-10 where 10 is exceptional quality.
+            Rate from 1-100 where 100 is exceptional quality.
             """,
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
@@ -205,7 +205,7 @@ class Qwen3MeetingEvaluationManager:
             4. Knowledge Integration: Are different expertise areas being combined effectively?
             5. Decision Support: Does the response provide information that aids decision-making?
             
-            Rate from 1-10 where 10 is excellent progress toward meeting goals.
+            Rate from 1-100 where 100 is excellent progress toward meeting goals.
             """,
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
@@ -513,7 +513,7 @@ class Qwen3MeetingEvaluationManager:
         final_report = self.generate_meeting_summary_report()
         final_report["holistic_evaluation"] = holistic_results
         final_report["transcript_metadata"] = {
-            "original_timestamp": transcript_data.get("timestamp"),
+            "original_timestamp": transcript_data.get("timestamp", ""),
             "evaluation_timestamp": time.time(),
             "total_responses": len(structured_responses),
             "evaluated_responses": completed_evaluations

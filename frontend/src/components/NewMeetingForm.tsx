@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { Expert, Meeting, Project, FileData } from '@/types';
+import { Expert, Meeting, Project, FileData, FileReference } from '@/types';
 import { Upload, X } from 'lucide-react';
 import { getProjects, getExpertTemplates } from '../../api'; 
 import { get } from 'http';
@@ -27,6 +27,8 @@ const NewMeetingForm = () => {
   const [rounds, setRounds] = useState(1);
   const [selectedExperts, setSelectedExperts] = useState<Expert[]>([]);
   const [files, setFiles] = useState<Record<string, FileList>>({});
+  const [fileReferences, setFileReferences] = useState<Record<string, FileReference[]>>({});
+  const [sessionId] = useState<string>(() => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const [expertToAdd, setExpertToAdd] = useState<string>('');
 
   useEffect(() => {
@@ -60,11 +62,52 @@ const NewMeetingForm = () => {
     const newFiles = { ...files };
     delete newFiles[expertId];
     setFiles(newFiles);
+    
+    // Also remove file references
+    const newFileReferences = { ...fileReferences };
+    delete newFileReferences[expertId];
+    setFileReferences(newFileReferences);
   };
 
-  const handleFileUpload = (expertId: string, fileList: FileList | null) => {
-    if (fileList) {
+  const handleFileUpload = async (expertId: string, fileList: FileList | null) => {
+    if (fileList && fileList.length > 0) {
       setFiles(prev => ({ ...prev, [expertId]: fileList }));
+      
+      try {
+        // Upload files immediately via HTTP
+        const formData = new FormData();
+        Array.from(fileList).forEach(file => {
+          formData.append('files', file);
+        });
+
+        const response = await fetch(`http://localhost:8000/upload-files/${sessionId}/${expertId}`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        // Store file references
+        setFileReferences(prev => ({
+          ...prev,
+          [expertId]: result.files
+        }));
+
+        console.log(`Successfully uploaded ${result.files.length} files for ${expertId}`);
+        
+      } catch (error) {
+        console.error(`Failed to upload files for ${expertId}:`, error);
+        alert(`Failed to upload files for ${expertId}. Please try again.`);
+        
+        // Clear the files on error
+        const newFiles = { ...files };
+        delete newFiles[expertId];
+        setFiles(newFiles);
+      }
     }
   };
 
@@ -79,31 +122,7 @@ const NewMeetingForm = () => {
       timestamp: Number(Date.now())
     };
 
-    const encodeFiles = async (): Promise<Array<Array<{filename: string, content: string}>>> => {
-      const result: Array<Array<{filename: string, content: string}>> = [];
-      for (const expert of selectedExperts) {
-        const fileList = files[expert.title];
-        if (!fileList || fileList.length === 0) {
-          result.push([]);
-          continue;
-        }
-
-        const fileArray: Array<{filename: string, content: string}> = [];
-        for (const file of Array.from(fileList)) {
-          const base64 = await file.arrayBuffer().then(buffer =>
-            btoa(String.fromCharCode(...new Uint8Array(buffer)))
-          );
-          fileArray.push({
-            filename: file.name,
-            content: base64
-          });
-        }
-        result.push(fileArray);
-      }
-      return result;
-    };
-
-    const vectorStore = await encodeFiles();
+    // Use file references instead of base64 encoding
     const meetingRequest = {
       project_name: selectedProjectId,
       experts: selectedExperts.map(e => ({
@@ -112,7 +131,8 @@ const NewMeetingForm = () => {
         goal: e.goal,
         role: e.role
       })),
-      vector_store: vectorStore,
+      file_references: fileReferences,
+      session_id: sessionId,
       meeting_topic: title,
       rounds: rounds
     };
@@ -235,9 +255,14 @@ const NewMeetingForm = () => {
                               <Upload className="h-4 w-4 text-muted-foreground" />
                             </div>
                             {files[expert.title] && (
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <div className="text-xs text-muted-foreground mt-1">
                                 {files[expert.title].length} file(s) selected
-                              </p>
+                                {fileReferences[expert.title] && (
+                                  <span className="text-green-600 ml-2">
+                                    ✓ {fileReferences[expert.title].length} uploaded
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </TableCell>
                           <TableCell>
