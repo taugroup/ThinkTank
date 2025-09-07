@@ -122,6 +122,14 @@ class ThinkTank:
         self._messages.append(Message(role=role, author=author, content=content))
         with open("meeting_transcript.txt", "a", encoding="utf-8") as f:
             f.write(f"\n----- {author} -----\n{content}\n")
+        with open("meeting_responses.jsonl", "a", encoding="utf-8") as jf:
+            json.dump({
+                "timestamp": msg.timestamp,
+                "role": role,
+                "author": author,
+                "content": content
+            }, jf)
+            jf.write("\n")
 
     def _context(self) -> str:
         return "\n".join(f"[{m.timestamp}] {m.author}: {m.content}" for m in self._messages)
