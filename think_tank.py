@@ -119,7 +119,8 @@ class ThinkTank:
     # Transcript helpers
     # ------------------------------------------------------------------
     def _log(self, role: str, author: str, content: str) -> None:
-        self._messages.append(Message(role=role, author=author, content=content))
+        msg = Message(role=role, author=author, content=content)
+        self._messages.append(msg)
         with open("meeting_transcript.txt", "a", encoding="utf-8") as f:
             f.write(f"\n----- {author} -----\n{content}\n")
         with open("meeting_responses.jsonl", "a", encoding="utf-8") as jf:

@@ -9,3 +9,4 @@ logs
 pandoc-*
 .deepeval/
 uploaded_files/
+meeting_responses.jsonl
