@@ -136,25 +136,69 @@ class AgentMetrics:
 
         return completion_fraction, results
 
+    def novel_contribution_ratio(
+        self,
+        prev_round: str,
+        curr_round: str,
+        threshold: float = 0.7
+    ) -> float:
+        """
+        Compute Novel Contribution Ratio (NCR) between two meeting rounds.
 
+        NCR = new_info_tokens / total_tokens_in_curr_round
+        A token is "new" if its sentence embedding similarity with all
+        sentences from prev_round is below the threshold.
+        """
+        # --- split into sentences ---
+        split_regex = r"[.!?]\s+"
+        prev_sents = [s for s in re.split(split_regex, prev_round) if s.strip()]
+        curr_sents = [s for s in re.split(split_regex, curr_round) if s.strip()]
+
+        if not curr_sents:
+            return 0.0
+
+        # --- embed once per sentence ---
+        prev_embs = np.vstack([self.get_embedding(s) for s in prev_sents]) if prev_sents else np.empty((0, 0))
+        curr_embs = [self.get_embedding(s) for s in curr_sents]
+
+        # --- count "new" tokens ---
+        def count_tokens(text: str) -> int:
+            return len(re.findall(r"\w+", text))
+
+        new_tokens = 0
+        total_tokens = sum(count_tokens(s) for s in curr_sents)
+
+        for sent, emb in zip(curr_sents, curr_embs):
+            if prev_embs.size == 0:
+                new_tokens += count_tokens(sent)
+                continue
+
+            # compute max similarity to any previous sentence
+            max_sim = max(self.cosine_similarity(emb, p_emb) for p_emb in prev_embs)
+            if max_sim < threshold:
+                new_tokens += count_tokens(sent)
+
+        return new_tokens / total_tokens if total_tokens else 0.0
+    
 if __name__ == "__main__":
-    # from agent_metrics import AgentMetrics  # your class
-
-    # Paths to your "textual JSON" files
     responder_path = "test_3/Coordinator_synthesis_20250909_205344.json"
-    critique_path = "test_3/Critical Thinker_critique_20250909_205022.json"
+    critique_path  = "test_3/Coordinator_synthesis_20250909_210604.json"
 
-    # Read the files as plain text
     with open(responder_path, 'r', encoding='utf-8') as f:
         responder_text = f.read()
 
     with open(critique_path, 'r', encoding='utf-8') as f:
         critique_text = f.read()
 
-    # Initialize metrics
     metrics = AgentMetrics(similarity_threshold=0.7)
 
-    # Evaluate critique support
-    score = metrics.evaluate_critique_support(responder_text, critique_text)
-    print(f"Critique validity score: {score:.3f}")
+    # Existing metric
+    # score = metrics.evaluate_critique_support(responder_text, critique_text)
+    # print(f"Critique validity score: {score:.3f}")
+
+    # ✅ Novel Contribution Ratio (responder vs critique)
+    
+    ncr = metrics.novel_contribution_ratio(critique_text,
+                                           responder_text)
+    print(f"Novel Contribution Ratio: {ncr:.3f}")
 

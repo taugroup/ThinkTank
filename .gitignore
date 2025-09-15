@@ -10,3 +10,5 @@ pandoc-*
 .deepeval/
 uploaded_files/
 meeting_responses.jsonl
+.env
+eval_rag_agent.ipynb
