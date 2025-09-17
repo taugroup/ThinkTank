@@ -179,26 +179,148 @@ class AgentMetrics:
                 new_tokens += count_tokens(sent)
 
         return new_tokens / total_tokens if total_tokens else 0.0
-    
+    def collaborative_relevance(
+        self,
+        agent_a_msgs,
+        agent_b_msgs,
+        goal_agent,
+        stream: bool = False,
+        threshold: float = 0.7
+    ):
+        """
+        Computes mutual relevance based on main findings of Agent A (extracted via LLM) 
+        and current responses of Agent B.
+
+        Args:
+            agent_a_msgs (list[str]): Previous messages from Agent A.
+            agent_b_msgs (list[str]): Current messages from Agent B.
+            goal_agent: Your Agno/LLM agent instance.
+            stream (bool): Whether to stream LLM output.
+            threshold (float): Cosine similarity threshold for reference detection.
+
+        Returns:
+            float: Fraction of Agent A's main findings referenced by Agent B.
+        """
+        import numpy as np
+        import re
+        import json
+
+        def split_sentences(text):
+            return [s.strip() for s in re.split(r'[.!?]\s+', text) if s.strip()]
+
+        # --- Step 1: Extract main findings from Agent A using LLM ---
+        agent_a_text = "\n".join(agent_a_msgs)
+        prompt = f"""
+        You are an assistant that extracts the key findings or main points from a series of messages.
+        Output a JSON array where each element is a main finding (a sentence or short paragraph with clear context, be as precise as possible).
+
+        Messages:
+        \"\"\"{agent_a_text}\"\"\"
+        """
+        response = goal_agent.run(prompt, stream=stream)
+        output_text = response.content
+        print("Extracted findings:", output_text)
+        # --- Step 2: Parse LLM output safely ---
+        match = re.search(r'(\[.*\])', output_text, flags=re.DOTALL)
+        if match:
+            try:
+                a_findings_raw = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                a_findings_raw = split_sentences(agent_a_text)
+        else:
+            a_findings_raw = split_sentences(agent_a_text)
+
+        # --- Step 3: Ensure all findings are strings ---
+        a_findings = []
+        for f in a_findings_raw:
+            if isinstance(f, dict):
+                # join all values into one string
+                text = " ".join(str(v) for v in f.values())
+            else:
+                text = str(f)
+            a_findings.append(text)
+
+        if not a_findings:
+            return 0.0
+
+        # --- Step 4: Embed Agent A findings ---
+        a_embs = [self.get_embedding(f) for f in a_findings]
+
+        # --- Step 5: Embed Agent B sentences ---
+        b_sents = [s for msg in agent_b_msgs for s in split_sentences(msg)]
+        b_embs = [self.get_embedding(s) for s in b_sents]
+
+        # --- Step 6: Count referenced findings ---
+        referenced = 0
+        for a_emb in a_embs:
+            if b_embs:
+                sims = [np.dot(a_emb, b_emb) / (np.linalg.norm(a_emb) * np.linalg.norm(b_emb)) for b_emb in b_embs]
+                if max(sims) >= threshold:
+                    referenced += 1
+
+        return referenced / len(a_findings)
+
 if __name__ == "__main__":
-    responder_path = "test_3/Coordinator_synthesis_20250909_205344.json"
-    critique_path  = "test_3/Coordinator_synthesis_20250909_210604.json"
 
-    with open(responder_path, 'r', encoding='utf-8') as f:
-        responder_text = f.read()
+    # ### Testing NCR metric
+    # responder_path = "test_3/Coordinator_synthesis_20250909_205344.json"
+    # critique_path  = "test_3/Coordinator_synthesis_20250909_210604.json"
 
-    with open(critique_path, 'r', encoding='utf-8') as f:
-        critique_text = f.read()
+    # with open(responder_path, 'r', encoding='utf-8') as f:
+    #     responder_text = f.read()
 
-    metrics = AgentMetrics(similarity_threshold=0.7)
+    # with open(critique_path, 'r', encoding='utf-8') as f:
+    #     critique_text = f.read()
+
+    # metrics = AgentMetrics(similarity_threshold=0.7)
+
+
 
     # Existing metric
     # score = metrics.evaluate_critique_support(responder_text, critique_text)
     # print(f"Critique validity score: {score:.3f}")
 
-    # ✅ Novel Contribution Ratio (responder vs critique)
-    
-    ncr = metrics.novel_contribution_ratio(critique_text,
-                                           responder_text)
-    print(f"Novel Contribution Ratio: {ncr:.3f}")
 
+    # ✅ Novel Contribution Ratio (responder vs critique)
+
+    # ncr = metrics.novel_contribution_ratio(critique_text,
+    #                                        responder_text)
+    # print(f"Novel Contribution Ratio: {ncr:.3f}")
+
+
+    ### Testing collaborative relevance metric
+    from agent_builder import build_local_agent
+
+    # Build your local agent
+    goal_agent = build_local_agent(
+        name="Goal Extractor",
+        description="Extracts actionable tasks and goals from meeting transcripts",
+        role="Analyze the transcript and provide a structured JSON list of tasks with categories",
+        temperature=0.0
+    )
+
+    # 2️⃣ Load responses from files
+    import json
+
+    CB1_msgs = "test_3/Computational Biologist_2_response_20250909_205716.json"
+    ML2_msgs = "test_3/Machine Learning Expert_1_response_20250909_204635.json"
+
+    with open(CB1_msgs, 'r', encoding='utf-8') as f:
+        CB1_json = json.load(f)
+        CB1_resp = CB1_json["content"]
+
+    with open(ML2_msgs, 'r', encoding='utf-8') as f:
+        ML2_json = json.load(f)
+        ML2_resp = ML2_json["content"]
+
+    # 3️⃣ Instantiate your metrics class
+    metrics = AgentMetrics(similarity_threshold=0.7)
+
+    # 4️⃣ Compute collaborative relevance
+    relevance = metrics.collaborative_relevance(
+        agent_b_msgs=[CB1_resp],
+        agent_a_msgs=[ML2_resp],
+        goal_agent=goal_agent
+    )
+
+    print(f"Collaborative Relevance: {relevance:.3f}")
