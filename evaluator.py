@@ -51,25 +51,19 @@ class AgentMetrics:
                 supported_count += 1
         
         return supported_count / len(claims) if claims else 0.0
-
-    def extract_tasks_from_coordinator(self,coordinator_json_path: str, goal_agent, stream: bool=False):
+    def extract_tasks_from_coordinator(self, content: str, goal_agent, stream: bool = False):
         """
-        Reads the coordinator's JSON response, extracts tasks/goals,
-        and returns a clean list of tasks in JSON format.
-        
+        Extracts tasks/goals from a transcript content string using an LLM agent.
+
         Args:
-            coordinator_json_path (str): Path to the coordinator JSON file.
+            content (str): The transcript content as a string.
             goal_agent: The LLM agent used to extract goals.
-            stream (bool): Whether to stream the agent's response.
-        
+            stream (bool): Whether to stream the LLM output.
+
         Returns:
             list[dict]: List of tasks in format [{"category": "...", "task": "..."}]
         """
-
-        # Load coordinator transcript
-        with open(coordinator_json_path, "r") as f:
-            transcript_json = json.load(f)
-        transcript_content = transcript_json["content"]
+        import re, json
 
         # Create prompt
         prompt = f"""
@@ -80,25 +74,27 @@ class AgentMetrics:
         [{{"category": "...", "task": "..."}}]
 
         Transcript:
-        \"\"\"{transcript_content}\"\"\"
+        \"\"\"{content}\"\"\"
         """
 
         # Run the agent
         response = goal_agent.run(prompt, stream=stream)
         output_text = response.content
 
-        # Extract JSON from agent output
+        # Try to extract JSON from the LLM output
         match = re.search(r'(\[.*\]|\{.*\})', output_text, flags=re.DOTALL)
         if match:
-            json_str = match.group(1)
             try:
-                return json.loads(json_str)
+                data = json.loads(match.group(1))
+                # Validate that each element is a dict with a "task" key
+                if isinstance(data, list) and all(isinstance(d, dict) and "task" in d for d in data):
+                    return data
             except json.JSONDecodeError:
-                print("⚠️ Failed to parse JSON, returning raw text")
-                return [output_text]
-        else:
-            print("⚠️ No JSON found in output")
-            return []
+                pass
+
+        # Fallback: treat each sentence as a task
+        sentences = [s.strip() for s in re.split(r'[.!?]\s+', output_text) if s.strip()]
+        return [{"category": None, "task": s} for s in sentences]
 
     def task_completion_vs_response(self,tasks, agent_response, threshold=0.7):
         """
@@ -259,6 +255,49 @@ class AgentMetrics:
                     referenced += 1
 
         return referenced / len(a_findings)
+
+    def goal_alignment(self, agent_a_json: str, agent_b_json: str, goal_agent, threshold: float = 0.75) -> float:
+        """
+        Measure semantic overlap of final goals between Agent A and Agent B.
+
+        Parameters
+        ----------
+        agent_a_json : str
+            Raw JSON string (or just the text content) from Agent A’s response file.
+        agent_b_json : str
+            Raw JSON string (or text content) from Agent B’s response file.
+        goal_agent : Agent
+            Your Agno agent used to extract tasks/goals.
+        threshold : float
+            Cosine similarity threshold for considering two goals aligned.
+
+        Returns
+        -------
+        float
+            Fraction of Agent A’s goals that align with some of Agent B’s goals.
+        """
+        # --- Extract goals from both agents using the goal agent ---
+        tasks_a = self.extract_tasks_from_coordinator(agent_a_json, goal_agent)
+        tasks_b = self.extract_tasks_from_coordinator(agent_b_json, goal_agent)
+        print("Agent A tasks:", tasks_a)
+        print("Agent B tasks:", tasks_b)
+        goals_a = [t["task"] for t in tasks_a]
+        goals_b = [t["task"] for t in tasks_b]
+
+        if not goals_a or not goals_b:
+            return 0.0
+
+        # --- Pre-compute embeddings for B goals ---
+        b_embs = [self.get_embedding(g) for g in goals_b]
+
+        aligned = 0
+        for ga in goals_a:
+            ga_emb = self.get_embedding(ga)
+            sims = [self.cosine_similarity(ga_emb, gb_emb) for gb_emb in b_embs]
+            if sims and max(sims) >= threshold:
+                aligned += 1
+
+        return aligned / len(goals_a)
 
 if __name__ == "__main__":
 
