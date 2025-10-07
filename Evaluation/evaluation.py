@@ -8,7 +8,13 @@ import time
 import json
 import concurrent.futures
 from LLMWrapper import Qwen3OllamaWrapper
+from LLMWrapper import GeminiProWrapper, GroqWrapper
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+
+gemini_api_key = os.getenv("GEMINI_API_KEY")
 # class AgentCollaborationMetric(GEval):
 #     def __init__(self, model):
 #         super().__init__(
@@ -120,6 +126,19 @@ class Qwen3MeetingEvaluationManager:
             max_tokens=2000      # Longer responses for detailed evaluation
         )
 
+        # ...existing code...
+        self.gemini_evaluator = GeminiProWrapper(
+            api_key=gemini_api_key,           # Pass your Gemini API key here
+            temperature=0.1,
+            max_tokens=2000
+        )
+        self.groq_evaluator = GroqWrapper(
+            model_name="openai/gpt-oss-120b",
+            base_url=None,         # ignored for Groq
+            thinking_mode=True,    # can toggle if you implement thinking mode
+            temperature=0.1,
+            max_tokens=2000
+        )
         # Initialize evaluation metrics with Qwen3
         self._setup_evaluation_metrics()
         
@@ -146,7 +165,7 @@ class Qwen3MeetingEvaluationManager:
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator,
+            model=self.gemini_evaluator,
             threshold=0.6,
             strict_mode=False
         )
@@ -167,7 +186,7 @@ class Qwen3MeetingEvaluationManager:
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator,
+            model=self.gemini_evaluator,
             threshold=0.6,
             strict_mode=False
         )
@@ -189,7 +208,7 @@ class Qwen3MeetingEvaluationManager:
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator,
+            model=self.gemini_evaluator,
             threshold=0.6,
             strict_mode=False
         )
@@ -211,7 +230,7 @@ class Qwen3MeetingEvaluationManager:
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator,
+            model=self.gemini_evaluator,
             threshold=0.6,
             strict_mode=False
         )
@@ -300,7 +319,8 @@ class Qwen3MeetingEvaluationManager:
                 "word_count": len(content.split()),
                 "project_context": self.project_name
             }
-            
+
+
             # Create test case
             test_case = LLMTestCase(
                 input=f"""
@@ -610,7 +630,8 @@ class Qwen3MeetingEvaluationManager:
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator
+            #model=self.qwen3_evaluator
+            model=self.groq_evaluator,
         )
         
         # Prepare full meeting context
