@@ -7,6 +7,8 @@ from typing import List, Dict, Any
 import time
 import json
 import concurrent.futures
+import re
+import numpy as np
 from Groqwrapper import GroqWrapper
 
 class GroqMeetingEvaluationManager:
@@ -27,6 +29,7 @@ class GroqMeetingEvaluationManager:
         self.project_name = project_name
         self.conversation_history = []
         self.evaluation_results = []
+        self.round_evaluation_results = [] # For round-level metrics
         self.round_summaries = {}
         self.agent_performance_tracker = {}
         
@@ -47,10 +50,81 @@ class GroqMeetingEvaluationManager:
         # Performance tracking
         self.start_time = time.time()
 
+    # --- Embedding and Similarity Helpers --- #
+    def get_embedding(self, text: str) -> np.ndarray:
+        """
+        TODO: Implement this with a real sentence embedding model.
+        This is a placeholder implementation for demonstration purposes.
+        For meaningful results, use sentence-transformers, OpenAI embeddings API, etc.
+        """
+        import hashlib
+        # Use a simple hashing to get a deterministic, fixed-size vector
+        hash_obj = hashlib.sha256(text.encode())
+        # Create a 384-dimensional vector, typical for some sentence transformers
+        embedding = np.frombuffer(hash_obj.digest(), dtype=np.float32, count=384 // 4)
+        # Normalize to a unit vector for cosine similarity
+        norm = np.linalg.norm(embedding)
+        return embedding / norm if norm != 0 else embedding
+
+    def cosine_similarity(self, v1: np.ndarray, v2: np.ndarray) -> float:
+        """Computes cosine similarity between two vectors."""
+        if v1.size == 0 or v2.size == 0:
+            return 0.0
+        dot_product = np.dot(v1, v2)
+        norm_v1 = np.linalg.norm(v1)
+        norm_v2 = np.linalg.norm(v2)
+        if norm_v1 == 0 or norm_v2 == 0:
+            return 0.0
+        return dot_product / (norm_v1 * norm_v2)
+
+    def novel_contribution_ratio(
+        self,
+        prev_round: str,
+        curr_round: str,
+        threshold: float = 0.7
+    ) -> float:
+        """
+        Compute Novel Contribution Ratio (NCR) between two meeting rounds.
+
+        NCR = new_info_tokens / total_tokens_in_curr_round
+        A token is "new" if its sentence embedding similarity with all
+        sentences from prev_round is below the threshold.
+        """
+        # --- split into sentences ---
+        split_regex = r"[.!?]\s+"
+        prev_sents = [s for s in re.split(split_regex, prev_round) if s.strip()]
+        curr_sents = [s for s in re.split(split_regex, curr_round) if s.strip()]
+
+        if not curr_sents:
+            return 0.0
+
+        # --- embed once per sentence ---
+        prev_embs = np.vstack([self.get_embedding(s) for s in prev_sents]) if prev_sents else np.empty((0, 0))
+        curr_embs = [self.get_embedding(s) for s in curr_sents]
+
+        # --- count "new" tokens ---
+        def count_tokens(text: str) -> int:
+            return len(re.findall(r"\w+", text))
+
+        new_tokens = 0
+        total_tokens = sum(count_tokens(s) for s in curr_sents)
+
+        for sent, emb in zip(curr_sents, curr_embs):
+            if prev_embs.size == 0:
+                new_tokens += count_tokens(sent)
+                continue
+
+            # compute max similarity to any previous sentence
+            max_sim = max(self.cosine_similarity(emb, p_emb) for p_emb in prev_embs)
+            if max_sim < threshold:
+                new_tokens += count_tokens(sent)
+
+        return new_tokens / total_tokens if total_tokens else 0.0
+
     def _setup_evaluation_metrics(self):
         """Setup comprehensive evaluation metrics using Groq with direct GEval instances"""
         
-        # Agent Collaboration Quality Metric
+        # INDIVIDUAL METRICS (per response)
         self.collaboration_metric = GEval(
             name="Agent Collaboration Quality",
             criteria="""
@@ -72,7 +146,6 @@ class GroqMeetingEvaluationManager:
             strict_mode=False
         )
         
-        # Agent Role Adherence Metric
         self.role_adherence_metric = GEval(
             name="Agent Role Adherence",
             criteria="""
@@ -93,7 +166,6 @@ class GroqMeetingEvaluationManager:
             strict_mode=False
         )
         
-        # Agent Response Quality Metric
         self.response_quality_metric = GEval(
             name="Agent Response Quality",
             criteria="""
@@ -114,8 +186,14 @@ class GroqMeetingEvaluationManager:
             threshold=0.6,
             strict_mode=False
         )
-        
-        # Meeting Progress Assessment Metric
+
+        self.individual_metrics = [
+            self.collaboration_metric,
+            self.role_adherence_metric,
+            self.response_quality_metric,
+        ]
+
+        # ROUND-LEVEL METRICS
         self.meeting_progress_metric = GEval(
             name="Meeting Progress Assessment",
             criteria="""
@@ -136,13 +214,53 @@ class GroqMeetingEvaluationManager:
             threshold=0.6,
             strict_mode=False
         )
-        
-        # Store all metrics
-        self.all_metrics = [
-            self.collaboration_metric,
-            self.role_adherence_metric,
-            self.response_quality_metric,
-            self.meeting_progress_metric
+
+        self.critique_support_metric = GEval(
+            name="Critique Support Evaluation",
+            criteria="""
+            Evaluate how well the critique aligns with and is supported by the responder's text.
+            1. Does the critique accurately reference the responder's statements?
+            2. Are the critique's points justified based on what the responder actually said?
+            3. Does the critique avoid misinterpreting or fabricating issues?
+
+            Score 0–1:
+            - 1.0 → Critique is fully supported by responder output.
+            - 0.5 → Partially supported or somewhat misaligned.
+            - 0.0 → Critique is mostly unrelated or unsupported.
+            """,
+            evaluation_params=[
+                LLMTestCaseParams.ACTUAL_OUTPUT,  # critique text
+                LLMTestCaseParams.INPUT           # responder text
+            ],
+            model=self.groq_evaluator,
+            threshold=0.6,
+            strict_mode=False
+        )
+
+        self.task_completion_metric = GEval(
+            name="Task Completion",
+            criteria="""
+            Evaluate how well the "Agent Response" completes the tasks laid out in the "Task-Setting Response".
+
+            1.  First, identify the specific, actionable tasks or goals mentioned in the "Task-Setting Response".
+            2.  For each task, check if the "Agent Response" provides a clear and direct attempt to address, answer, or complete it.
+            3.  The evaluation should be based on whether the agent's response directly contributes to fulfilling the tasks, not just on mentioning related keywords.
+
+            Score from 0.0 to 1.0, representing the fraction of tasks that were completed or meaningfully addressed. For example, if 3 out of 4 tasks were addressed, the score should be 0.75. If no tasks are given in the "Task-Setting Response", the score should be 1.0 by default.
+            """,
+            evaluation_params=[
+                LLMTestCaseParams.INPUT,      # Task-Setting Response (from Coordinator/System)
+                LLMTestCaseParams.ACTUAL_OUTPUT # Agent Response
+            ],
+            model=self.groq_evaluator,
+            threshold=0.5,
+            strict_mode=False
+        )
+
+        self.round_metrics = [
+            self.meeting_progress_metric,
+            self.critique_support_metric,
+            self.task_completion_metric
         ]
 
     def add_response(self, agent_name: str, content: str, round_num: int, response_type: str = "expert"):
@@ -159,7 +277,6 @@ class GroqMeetingEvaluationManager:
         
         self.conversation_history.append(response_entry)
         
-        # Initialize agent performance tracking
         if agent_name not in self.agent_performance_tracker:
             self.agent_performance_tracker[agent_name] = {
                 "total_responses": 0,
@@ -173,28 +290,25 @@ class GroqMeetingEvaluationManager:
         self.agent_performance_tracker[agent_name]["total_responses"] += 1
         self.agent_performance_tracker[agent_name]["response_types"].append(response_type)
     
-    def evaluate_response_async(self, agent_name: str, content: str, round_num: int, response_type: str = "expert"):
-        """Submit evaluation task to thread pool"""
+    def evaluate_response_async(self, agent_name: str, content: str, round_num: int, response_type: str):
+        """Submit individual evaluation task to thread pool"""
         future = self.executor.submit(
             self._evaluate_single_response, 
             agent_name, content, round_num, response_type
         )
         return future
-    
+
     def _evaluate_single_response(self, agent_name: str, content: str, round_num: int, response_type: str):
-        """Comprehensive evaluation of a single agent response using Groq"""
+        """Comprehensive evaluation of a single agent response using individual metrics"""
         try:
-            # Get agent information
             agent_info = next(
                 (exp for exp in self.experts if exp.get('title') == agent_name), 
                 {"title": agent_name, "expertise": "Unknown", "role": "Unknown", "goal": "Unknown"}
             )
             
-            # Prepare conversation context
             recent_context = self._get_recent_context(agent_name, 5)
             meeting_stage = self._determine_meeting_stage(round_num)
             
-            # Create comprehensive metadata
             metadata = {
                 "agent_name": agent_name,
                 "agent_info": agent_info,
@@ -209,7 +323,6 @@ class GroqMeetingEvaluationManager:
                 "project_context": self.project_name
             }
             
-            # Create test case
             test_case = LLMTestCase(
                 input=f"""
                     Meeting Topic: {self.meeting_topic}
@@ -222,11 +335,10 @@ class GroqMeetingEvaluationManager:
                 additional_metadata=metadata
             )
             
-            # Run all evaluations
             results = {}
             evaluation_start = time.time()
             
-            for metric in self.all_metrics:
+            for metric in self.individual_metrics:
                 try:
                     metric_start = time.time()
                     metric.measure(test_case)
@@ -238,22 +350,15 @@ class GroqMeetingEvaluationManager:
                         "evaluation_time": metric_duration
                     }
                     
-                    print(f"✅ {metric.name}: {metric.score:.2f} ({metric_duration:.1f}s)")
+                    print(f"✅ [Individual] {agent_name} - {metric.name}: {metric.score:.2f} ({metric_duration:.1f}s)")
                     
                 except Exception as e:
-                    print(f"❌ {metric.name} failed: {e}")
-                    results[metric.name] = {
-                        "score": 0,
-                        "reason": f"Evaluation error: {str(e)}",
-                        "evaluation_time": 0
-                    }
+                    print(f"❌ {metric.name} failed for {agent_name}: {e}")
+                    results[metric.name] = {"score": 0, "reason": f"Evaluation error: {str(e)}", "evaluation_time": 0}
             
             evaluation_duration = time.time() - evaluation_start
-            
-            # Calculate composite score
             composite_score = self._calculate_composite_score(results)
             
-            # Store comprehensive evaluation result
             evaluation_result = {
                 "agent": agent_name,
                 "round": round_num,
@@ -263,188 +368,186 @@ class GroqMeetingEvaluationManager:
                 "composite_score": composite_score,
                 "results": results,
                 "metadata": metadata,
-                "content_preview": content[:200] + "..." if len(content) > 200 else content
+                "content_preview": content[:150] + "..."
             }
             
             self.evaluation_results.append(evaluation_result)
-            
-            # Update agent performance tracking
             self._update_agent_performance(agent_name, evaluation_result)
             
             print(f"📊 {agent_name} (Round {round_num}) - Composite Score: {composite_score:.2f}")
-            
             return evaluation_result
             
         except Exception as e:
             print(f"❌ Critical evaluation error for {agent_name}: {e}")
-            return {
-                "agent": agent_name,
-                "round": round_num,
-                "error": str(e),
-                "timestamp": time.time()
-            }
-    
+            return {"agent": agent_name, "round": round_num, "error": str(e), "timestamp": time.time()}
+
+    def _evaluate_round(self, round_num: int, round_responses: List[Dict]):
+        """Perform round-level evaluations for metrics like Task Completion and Critique Support."""
+        print(f"🔬 Starting evaluations for Round {round_num}...")
+        
+        # 1. Identify response types for the round
+        facilitator_resp = next((r for r in round_responses if r['type'] == 'facilitator'), None)
+        critic_resp = next((r for r in round_responses if r['type'] == 'critic'), None)
+        expert_resps = [r for r in round_responses if r['type'] == 'expert']
+        
+        round_results = {"round": round_num, "results": {}}
+
+        # --- Run Novel Contribution Ratio --- #
+        try:
+            prev_round_resps = [r for r in self.conversation_history if r['round'] == round_num - 1]
+            if prev_round_resps:
+                prev_round_text = "\n\n".join([f"{r['agent']}: {r['content']}" for r in prev_round_resps])
+                curr_round_text = "\n\n".join([f"{r['agent']}: {r['content']}" for r in round_responses])
+                ncr_score = self.novel_contribution_ratio(prev_round_text, curr_round_text)
+                round_results["results"]["Novel Contribution Ratio"] = {
+                    "score": ncr_score,
+                    "reason": f"{ncr_score:.1%} of the content in this round was new information."
+                }
+                print(f"✅ [Round {round_num}] Novel Contribution Ratio: {ncr_score:.2f}")
+        except Exception as e:
+            print(f"❌ [Round {round_num}] Novel Contribution Ratio failed: {e}")
+
+        # --- Run DeepEval Round Metrics --- #
+        if not expert_resps:
+            print(f"🟡 No expert responses in Round {round_num}, skipping some round evaluations.")
+            self.round_evaluation_results.append(round_results)
+            return
+
+        combined_expert_content = "\n\n".join([f"{r['agent']}: {r['content']}" for r in expert_resps])
+
+        for metric in self.round_metrics:
+            tc_to_use = None
+            try:
+                if metric.name == "Task Completion" and facilitator_resp:
+                    tc_to_use = LLMTestCase(
+                        input=facilitator_resp['content'],
+                        actual_output=combined_expert_content
+                    )
+                
+                elif metric.name == "Critique Support Evaluation" and critic_resp:
+                    tc_to_use = LLMTestCase(
+                        input=combined_expert_content,
+                        actual_output=critic_resp['content']
+                    )
+
+                elif metric.name == "Meeting Progress Assessment":
+                    all_round_content = "\n\n".join([f"{r['agent']}: {r['content']}" for r in round_responses])
+                    tc_to_use = LLMTestCase(
+                        input=f"Meeting Topic: {self.meeting_topic}\nRound: {round_num}",
+                        actual_output=all_round_content
+                    )
+
+                if tc_to_use:
+                    metric_start = time.time()
+                    metric.measure(tc_to_use)
+                    metric_duration = time.time() - metric_start
+                    round_results["results"][metric.name] = {
+                        "score": metric.score,
+                        "reason": metric.reason,
+                        "evaluation_time": metric_duration
+                    }
+                    print(f"✅ [Round {round_num}] {metric.name}: {metric.score:.2f} ({metric_duration:.1f}s)")
+
+            except Exception as e:
+                print(f"❌ [Round {round_num}] {metric.name} failed: {e}")
+                round_results["results"][metric.name] = {"score": 0, "reason": f"Evaluation error: {str(e)}"}
+        
+        self.round_evaluation_results.append(round_results)
+        return round_results
+
     def _calculate_composite_score(self, results: Dict) -> float:
         """Calculate weighted composite score from all metrics"""
         weights = {
-            "Agent Collaboration Quality": 0.25,
-            "Agent Role Adherence": 0.20,
-            "Agent Response Quality": 0.25,
-            "Meeting Progress Assessment": 0.15,
-            "Answer Relevancy": 0.10,
-            "Faithfulness": 0.05
+            "Agent Collaboration Quality": 0.3,
+            "Agent Role Adherence": 0.4,
+            "Agent Response Quality": 0.3,
         }
         
-        total_score = 0
-        total_weight = 0
-        
-        for metric_name, weight in weights.items():
-            if metric_name in results and results[metric_name]["score"] > 0:
-                total_score += results[metric_name]["score"] * weight
-                total_weight += weight
+        total_score = sum(results.get(name, {}).get("score", 0) * weight for name, weight in weights.items())
+        total_weight = sum(weight for name, weight in weights.items() if name in results)
         
         return total_score / total_weight if total_weight > 0 else 0
     
     def _update_agent_performance(self, agent_name: str, evaluation_result: Dict):
         """Update agent performance tracking"""
         tracker = self.agent_performance_tracker[agent_name]
-        
-        # Update scores
         composite_score = evaluation_result["composite_score"]
         tracker["total_score"] += composite_score
         tracker["scores_by_round"][evaluation_result["round"]] = composite_score
         
-        # Extract strengths and improvement areas from evaluation reasons
         for metric_name, result in evaluation_result["results"].items():
-            reason = result.get("reason", "")
-            if result["score"] >= 8:
-                # High score - extract strengths
-                if "excellent" in reason.lower() or "strong" in reason.lower():
-                    tracker["strengths"].append(f"{metric_name}: {reason[:100]}...")
-            elif result["score"] <= 5:
-                # Low score - extract improvement areas
-                tracker["improvement_areas"].append(f"{metric_name}: {reason[:100]}...")
+            if result.get("score", 0) >= 0.8:
+                tracker["strengths"].append(f"{metric_name}: {result.get('reason', '')[:100]}...")
+            elif result.get("score", 0) <= 0.5:
+                tracker["improvement_areas"].append(f"{metric_name}: {result.get('reason', '')[:100]}...")
     
     def _get_recent_context(self, current_agent: str, num_responses: int = 5) -> List[Dict]:
         """Get recent conversation context, excluding current agent's last response"""
-        relevant_history = []
-        
-        for entry in reversed(self.conversation_history):
-            if len(relevant_history) >= num_responses:
-                break
-            if entry["agent"] != current_agent:  # Exclude same agent's responses
-                relevant_history.append({
-                    "agent": entry["agent"],
-                    "content": entry["content"][:150] + "..." if len(entry["content"]) > 150 else entry["content"],
-                    "round": entry["round"],
-                    "type": entry["type"]
-                })
-        
-        return list(reversed(relevant_history))
+        relevant_history = [r for r in self.conversation_history if r["agent"] != current_agent][-num_responses:]
+        return [{k: v for k, v in entry.items() if k in ['agent', 'content', 'round', 'type']} for entry in relevant_history]
     
     def _determine_meeting_stage(self, round_num: int) -> str:
         """Determine the current stage of the meeting"""
         total_rounds = max([entry["round"] for entry in self.conversation_history] + [round_num])
-        
-        if round_num == 1:
-            return "Opening & Initial Contributions"
-        elif round_num <= total_rounds * 0.4:
-            return "Exploration & Information Gathering"
-        elif round_num <= total_rounds * 0.7:
-            return "Analysis & Discussion"
-        elif round_num <= total_rounds * 0.9:
-            return "Synthesis & Decision Making"
-        else:
-            return "Conclusion & Action Planning"
+        if round_num == 1: return "Opening & Initial Contributions"
+        if round_num <= total_rounds * 0.4: return "Exploration & Information Gathering"
+        if round_num <= total_rounds * 0.7: return "Analysis & Discussion"
+        if round_num <= total_rounds * 0.9: return "Synthesis & Decision Making"
+        return "Conclusion & Action Planning"
         
     def evaluate_transcript(self, transcript_data: Dict) -> Dict[str, Any]:
-        """
-        Evaluate a complete meeting transcript after the meeting is done
-        
-        Args:
-            transcript_data: {
-                "meeting_topic": str,
-                "project_name": str,
-                "experts": [{"title": str, "expertise": str, "role": str, "goal": str}],
-                "transcript": [{"name": str, "content": str, "round": int, "type": str}],
-                "summary": str,
-                "timestamp": int
-            }
-        """
+        """Evaluate a complete meeting transcript after the meeting is done"""
         print("🔍 Starting post-meeting transcript evaluation with Groq...")
         
-        # Initialize from transcript data
         self.meeting_topic = transcript_data["meeting_topic"]
         self.project_name = transcript_data["project_name"]
         self.experts = transcript_data["experts"]
         
-        # Parse and structure the transcript
         structured_responses = self._parse_transcript(transcript_data["transcript"])
-        
-        # Populate conversation history
         self.conversation_history = structured_responses
         self._initialize_agent_trackers()
     
-        evaluation_futures = []
-        
+        # --- Part 1: Individual Response Evaluation --- 
+        print("🏃‍➡️ Starting individual response evaluations...")
+        individual_futures = []
         for response in structured_responses:
-            # Skip system messages and headers
             if response["type"] in ["system", "header"] or not response["content"].strip():
                 continue
-                
             future = self.evaluate_response_async(
-                response["agent"],
-                response["content"],
-                response["round"],
-                response["type"]
+                response["agent"], response["content"], response["round"], response["type"]
             )
-            evaluation_futures.append(future)
+            individual_futures.append(future)
         
-        # Wait for all evaluations to complete
-        print(f"⏳ Processing {len(evaluation_futures)} evaluations...")
-        completed_evaluations = 0
-        
-        for future in evaluation_futures:
-            try:
-                result = future.result(timeout=3000) 
-                if result and "error" not in result:
-                    completed_evaluations += 1
-            except Exception as e:
-                print(f"⚠️ Evaluation error: {e}")
-        
-        print(f"✅ Completed {completed_evaluations}/{len(evaluation_futures)} evaluations")
-        
-        # Perform holistic meeting evaluation
-        holistic_results = self._evaluate_meeting_holistically(transcript_data)
-        
-        # Generate comprehensive report
-        final_report = self.generate_meeting_summary_report()
-        final_report["holistic_evaluation"] = holistic_results
-        final_report["transcript_metadata"] = {
-            "original_timestamp": transcript_data.get("timestamp", ""),
-            "evaluation_timestamp": time.time(),
-            "total_responses": len(structured_responses),
-            "evaluated_responses": completed_evaluations
-        }
-        
-        return final_report
-    
-    # [Include all the remaining helper methods from the original code - they remain unchanged]
-    # I'll just include the key ones that reference the model:
-    # Add these methods to the GroqMeetingEvaluationManager class:
+        concurrent.futures.wait(individual_futures)
+        print("✅ Completed individual response evaluations.")
+
+        # --- Part 2: Round-level Evaluation --- 
+        print("🔬 Starting round-level evaluations...")
+        round_futures = []
+        rounds = {}
+        for resp in structured_responses:
+            r_num = resp['round']
+            if r_num not in rounds: rounds[r_num] = []
+            rounds[r_num].append(resp)
+
+        for round_num, round_responses in rounds.items():
+            if round_num == 0: continue
+            future = self.executor.submit(self._evaluate_round, round_num, round_responses)
+            round_futures.append(future)
+
+        concurrent.futures.wait(round_futures)
+        print("✅ Completed round-level evaluations.")
+
+        # --- Part 3: Reporting --- 
+        return self.generate_meeting_summary_report()
 
     def _parse_transcript(self, transcript: List[Dict]) -> List[Dict]:
         """Parse transcript into structured response format"""
         structured_responses = []
-        
         for entry in transcript:
-            # Determine response type based on agent name patterns
             response_type = self._classify_response_type(entry["name"])
-            
-            # Extract round number (default to 1 if not specified)
             round_num = entry.get("round", 1)
-            
-            structured_response = {
+            structured_responses.append({
                 "agent": entry["name"],
                 "content": entry["content"],
                 "round": round_num,
@@ -452,105 +555,36 @@ class GroqMeetingEvaluationManager:
                 "timestamp": time.time(),
                 "word_count": len(entry["content"].split()),
                 "character_count": len(entry["content"])
-            }
-            
-            structured_responses.append(structured_response)
-        
+            })
         return structured_responses
 
     def _classify_response_type(self, agent_name: str) -> str:
         """Classify response type based on agent name"""
         agent_name_lower = agent_name.lower()
-        
-        if any(keyword in agent_name_lower for keyword in ["meeting", "round", "summary", "final"]):
-            return "system"
-        elif "critic" in agent_name_lower:
-            return "critic"
-        elif "feedback" in agent_name_lower or "pi" in agent_name_lower:
-            return "facilitator"
-        elif agent_name.startswith("#") or agent_name.startswith("**"):
-            return "header"
-        else:
-            return "expert"
+        if any(keyword in agent_name_lower for keyword in ["meeting", "round", "summary", "final"]): return "system"
+        if "critic" in agent_name_lower: return "critic"
+        if any(keyword in agent_name_lower for keyword in ["feedback", "pi", "coordinator"]): return "facilitator"
+        if agent_name.startswith("#") or agent_name.startswith("**"): return "header"
+        return "expert"
 
     def _initialize_agent_trackers(self):
         """Initialize agent performance trackers from transcript"""
         for response in self.conversation_history:
             agent_name = response["agent"]
-            
             if agent_name not in self.agent_performance_tracker:
                 self.agent_performance_tracker[agent_name] = {
-                    "total_responses": 0,
-                    "total_score": 0,
-                    "scores_by_round": {},
-                    "response_types": [],
-                    "strengths": [],
-                    "improvement_areas": []
+                    "total_responses": 0, "total_score": 0, "scores_by_round": {},
+                    "response_types": [], "strengths": [], "improvement_areas": []
                 }
-            
             self.agent_performance_tracker[agent_name]["total_responses"] += 1
             self.agent_performance_tracker[agent_name]["response_types"].append(response["type"])
-
-    def generate_meeting_summary_report(self) -> Dict[str, Any]:
-        """Generate comprehensive meeting summary report"""
-        try:
-            # Generate agent reports
-            agent_reports = {}
-            for agent_name in self.agent_performance_tracker.keys():
-                agent_reports[agent_name] = self.get_agent_detailed_report(agent_name)
-            
-            # Calculate basic insights directly from evaluation results
-            basic_insights = self._calculate_basic_insights()
-            
-            # Calculate meeting quality assessment
-            overall_quality = self._assess_overall_meeting_quality(basic_insights)
-            
-            # Generate executive summary
-            executive_summary = self._generate_executive_summary(basic_insights, agent_reports)
-            
-            # Create comprehensive report structure
-            report = {
-                "meeting_metadata": {
-                    "topic": self.meeting_topic,
-                    "project": self.project_name,
-                    "duration_minutes": round((time.time() - self.start_time) / 60, 2),
-                    "total_responses": len(self.conversation_history),
-                    "total_evaluations": len(self.evaluation_results),
-                    "evaluation_date": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                    "participants": [agent["title"] for agent in self.experts],
-                },
-                
-                "executive_summary": executive_summary,
-                
-                "overall_assessment": {
-                    "quality_rating": overall_quality["rating"],
-                    "average_score": basic_insights.get("average_composite_score", 0),
-                    "performance_trend": basic_insights.get("performance_trend", "unknown"),
-                    "key_strengths": overall_quality["strengths"],
-                    "improvement_areas": overall_quality["weaknesses"],
-                },
-                
-                "agent_performance": agent_reports,
-                
-                "key_insights": basic_insights,
-            }
-            
-            return report
-            
-        except Exception as e:
-            print(f"❌ Error generating meeting summary report: {e}")
-            return {
-                "error": str(e),
-                "timestamp": time.time(),
-            }
 
     def _calculate_basic_insights(self) -> Dict[str, Any]:
         """Calculate basic insights from evaluation results"""
         if not self.evaluation_results:
             return {"status": "No evaluations completed yet"}
         
-        recent_results = self.evaluation_results[-5:]
-        avg_composite = sum(r["composite_score"] for r in recent_results) / len(recent_results)
+        avg_composite = sum(r["composite_score"] for r in self.evaluation_results) / len(self.evaluation_results)
         
         agent_averages = {}
         for agent_name, tracker in self.agent_performance_tracker.items():
@@ -561,25 +595,11 @@ class GroqMeetingEvaluationManager:
         
         return {
             "average_composite_score": avg_composite,
-            "performance_trend": "improving",
+            "performance_trend": "N/A",
             "top_performer": {
                 "agent": top_performer,
                 "score": agent_averages.get(top_performer, 0)
             } if top_performer else None,
-        }
-
-    def get_agent_detailed_report(self, agent_name: str) -> Dict[str, Any]:
-        """Generate detailed performance report for a specific agent"""
-        if agent_name not in self.agent_performance_tracker:
-            return {"error": f"No data found for agent {agent_name}"}
-        
-        tracker = self.agent_performance_tracker[agent_name]
-        
-        return {
-            "agent_name": agent_name,
-            "overall_average": tracker["total_score"] / tracker["total_responses"] if tracker["total_responses"] > 0 else 0,
-            "total_responses": tracker["total_responses"],
-            "scores_by_round": tracker["scores_by_round"],
         }
 
     def _assess_overall_meeting_quality(self, insights: Dict) -> Dict[str, Any]:
@@ -588,114 +608,74 @@ class GroqMeetingEvaluationManager:
         
         if avg_score >= 0.85:
             rating = "excellent"
-            strengths = ["Outstanding collaboration"]
+            strengths = ["Outstanding collaboration and role adherence"]
             weaknesses = ["Minor optimization opportunities"]
         elif avg_score >= 0.70:
             rating = "good"
-            strengths = ["Solid collaboration"]
-            weaknesses = ["Some areas for improvement"]
+            strengths = ["Solid individual performances"]
+            weaknesses = ["Some areas for improvement in collaboration"]
         else:
             rating = "needs_improvement"
             strengths = ["Meeting completed"]
-            weaknesses = ["Collaboration issues identified"]
+            weaknesses = ["Collaboration and role adherence issues identified"]
         
         return {"rating": rating, "strengths": strengths, "weaknesses": weaknesses}
 
     def _generate_executive_summary(self, insights: Dict, agent_reports: Dict) -> str:
         """Generate executive summary"""
         avg_score = insights.get("average_composite_score", 0)
-        return f"Meeting completed with quality score of {avg_score:.2f}/1.0"
-    def _evaluate_meeting_holistically(self, transcript_data: Dict) -> Dict[str, Any]:
-        """Perform holistic evaluation of the entire meeting"""
-        print("🔬 Performing holistic meeting evaluation with Groq...")
+        return f"Meeting completed with an average individual agent score of {avg_score:.2f}/1.0. Round-level evaluations provide further insight into collaborative outcomes."
+
+    def generate_meeting_summary_report(self) -> Dict[str, Any]:
+        """Generate comprehensive meeting summary report including round-level results"""
+        agent_reports = {name: self.get_agent_detailed_report(name) for name in self.agent_performance_tracker.keys()}
         
-        # Create holistic evaluation metric
-        holistic_metric = GEval(
-            name="Holistic Meeting Quality",
-            criteria="""
-            Evaluate the overall quality and effectiveness of this multi-agent meeting:
-            
-            **Meeting Effectiveness (Rate 1-10):**
-            1. **Objective Achievement** (25%): Did the meeting achieve its stated goals?
-            2. **Collaborative Intelligence** (20%): Did agents effectively build on each other's expertise?
-            3. **Decision Quality** (20%): Were well-informed decisions reached?
-            4. **Knowledge Integration** (15%): How well were different expertise areas combined?
-            5. **Meeting Flow** (10%): Was the discussion logical and well-structured?
-            6. **Actionable Outcomes** (10%): Did the meeting produce clear next steps?
-            
-            **Consider the complete meeting arc:**
-            - Opening and agenda setting
-            - Information sharing and exploration
-            - Analysis and discussion
-            - Synthesis and decision-making
-            - Conclusion and action planning
-            
-            Provide specific examples of what worked well and what could be improved.
-            """,
-            evaluation_params=[
-                LLMTestCaseParams.INPUT,
-                LLMTestCaseParams.ACTUAL_OUTPUT
-            ],
-            model=self.groq_evaluator
-        )
-        
-        # Prepare full meeting context
-        full_transcript = "\n\n".join([
-            f"[{entry['round']}] {entry['agent']}: {entry['content']}"
-            for entry in self.conversation_history
-            if entry["type"] != "system"
-        ])
-        
-        # Create test case for holistic evaluation
-        holistic_test_case = LLMTestCase(
-            input=f"""
-                Meeting Topic: {self.meeting_topic}
-                Project: {self.project_name}
-                Participants: {', '.join([exp['title'] for exp in self.experts])}
-                Meeting Summary: {transcript_data.get('summary', 'No summary provided')}
-            """.strip(),
-            actual_output=full_transcript
-        )
-        
-        # Run holistic evaluation
-        try:
-            holistic_metric.measure(holistic_test_case)
-            return {
-                "overall_score": holistic_metric.score,
-                "detailed_analysis": holistic_metric.reason,
-                "evaluation_success": True
-            }
-        except Exception as e:
-            print(f"❌ Holistic evaluation failed: {e}")
-            return {
-                "overall_score": 0,
-                "detailed_analysis": f"Evaluation failed: {str(e)}",
-                "evaluation_success": False
-            }
-    
-    # [All other helper methods remain the same - just copy them from the original]
-    # Including: generate_meeting_summary_report, _calculate_basic_insights, 
-    # _parse_transcript, etc. They don't need changes.
+        basic_insights = self._calculate_basic_insights()
+        overall_quality = self._assess_overall_meeting_quality(basic_insights)
+        executive_summary = self._generate_executive_summary(basic_insights, agent_reports)
+
+        return {
+            "meeting_metadata": {
+                "topic": self.meeting_topic,
+                "project": self.project_name,
+                "duration_minutes": round((time.time() - self.start_time) / 60, 2),
+                "total_responses": len(self.conversation_history),
+                "participants": [agent["title"] for agent in self.experts],
+            },
+            "executive_summary": executive_summary,
+            "overall_assessment": {
+                "quality_rating": overall_quality["rating"],
+                "average_score": basic_insights.get("average_composite_score", 0),
+                "performance_trend": basic_insights.get("performance_trend", "unknown"),
+                "key_strengths": overall_quality["strengths"],
+                "improvement_areas": overall_quality["weaknesses"],
+            },
+            "agent_performance": agent_reports,
+            "key_insights": basic_insights,
+            "round_evaluations": self.round_evaluation_results,
+            "full_evaluation_log": self.evaluation_results
+        }
+
+    def get_agent_detailed_report(self, agent_name: str) -> Dict[str, Any]:
+        """Generate detailed performance report for a specific agent"""
+        if agent_name not in self.agent_performance_tracker: return {"error": f"No data for {agent_name}"}
+        tracker = self.agent_performance_tracker[agent_name]
+        avg_score = tracker["total_score"] / tracker["total_responses"] if tracker["total_responses"] > 0 else 0
+        return {
+            "agent_name": agent_name,
+            "overall_average_score": avg_score,
+            "total_responses": tracker["total_responses"],
+            "scores_by_round": tracker["scores_by_round"],
+            "strengths": list(set(tracker["strengths"]) - set(tracker["improvement_areas"])),
+            "improvement_areas": list(set(tracker["improvement_areas"]))
+        }
 
     def shutdown(self):
-        """Cleanup resources and generate final report"""
-        print("🔄 Shutting down evaluation manager...")
-        
-        # Wait for pending evaluations
+        """Cleanup resources"""
         self.executor.shutdown(wait=True)
-        
-        # Generate final report
-        final_report = self.generate_meeting_summary_report()
-        
-        print(f"✅ Evaluation complete. Total evaluations: {len(self.evaluation_results)}")
-        if final_report.get("overall_assessment"):
-            print(f"📊 Average meeting quality: {final_report['overall_assessment']['average_score']:.2f}/1.0")
-        
-        return final_report
+        print("✅ Evaluation complete.")
 
-
-# [Copy all remaining helper methods from the original - they're unchanged]
-# Just update the function name references:
+# Example usage and other functions remain largely the same, but would now print a different report structure.
 
 def evaluate_meeting_transcript(transcript_file_path: str = None, transcript_data: Dict = None):
     """
@@ -710,32 +690,26 @@ def evaluate_meeting_transcript(transcript_file_path: str = None, transcript_dat
     if not transcript_data:
         raise ValueError("Either transcript_file_path or transcript_data must be provided")
     
-    # Validate transcript data structure
     required_fields = ["meeting_topic", "experts", "transcript"]
     for field in required_fields:
         if field not in transcript_data:
             raise ValueError(f"Missing required field: {field}")
     
-    # Initialize evaluation manager with Groq
     eval_manager = GroqMeetingEvaluationManager(
         meeting_topic=transcript_data["meeting_topic"],
         experts=transcript_data["experts"],
         project_name=transcript_data.get("project_name", "Unknown Project")
     )
     
-    # Evaluate the transcript
     evaluation_report = eval_manager.evaluate_transcript(transcript_data)
     
-    # Cleanup
     eval_manager.shutdown()
     
     return evaluation_report
 
-
 def example_transcript_evaluation():
     """Example of how to evaluate a transcript with Groq"""
     
-    # [Same sample_transcript structure as original]
     sample_transcript = {
         "meeting_topic": "Should we implement real-time analytics?",
         "project_name": "Analytics Platform",
@@ -758,28 +732,29 @@ def example_transcript_evaluation():
         "timestamp": int(time.time())
     }
     
-    # Evaluate the transcript
     print("🚀 Starting transcript evaluation with Groq (openai/gpt-oss-120b)...")
     evaluation_report = evaluate_meeting_transcript(transcript_data=sample_transcript)
     
-    # Display results
     print("\n📊 Evaluation Results:")
     print(f"Overall Meeting Quality: {evaluation_report['overall_assessment']['average_score']:.2f}/1.0")
     print(f"Quality Rating: {evaluation_report['overall_assessment']['quality_rating']}")
     
-    # Agent performance summary
     print("\n👥 Agent Performance:")
     for agent_name, report in evaluation_report['agent_performance'].items():
         if "error" not in report:
-            print(f"  {agent_name}: {report['overall_average']:.2f}/1.0 ({report['total_responses']} responses)")
+            print(f"  {agent_name}: {report['overall_average_score']:.2f}/1.0 ({report['total_responses']} responses)")
     
+    print("\n🔬 Round-level Evaluations:")
+    for round_eval in evaluation_report['round_evaluations']:
+        print(f"  Round {round_eval['round']}:")
+        for metric, result in round_eval['results'].items():
+            print(f"    - {metric}: {result['score']:.2f}")
+
     return evaluation_report
 
 if __name__ == "__main__":
-    # Run example evaluation
     report = example_transcript_evaluation()
     
-    # Save detailed report
     import json
     with open("meeting_evaluation_report_groq.json", "w") as f:
         json.dump(report, f, indent=2, default=str)
