@@ -12,9 +12,9 @@ class AgentMetrics:
         self.threshold = similarity_threshold
     
     def get_embedding(self, text: str) -> np.ndarray:
-        """Return 1D embedding for text."""
         response = ollama.embeddings(model=self.embedding_model, prompt=text)
         return np.array(response["embedding"]).flatten()
+        """Return 1D embedding for text."""
     
     def cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
         """Compute cosine similarity between two vectors."""
@@ -51,21 +51,22 @@ class AgentMetrics:
                 supported_count += 1
         
         return supported_count / len(claims) if claims else 0.0
-    def extract_tasks_from_coordinator(self, content: str, goal_agent, stream: bool = False):
+    
+    def extract_tasks_from_coordinator(self, content: str, llm, stream: bool = False):
         """
-        Extracts tasks/goals from a transcript content string using an LLM agent.
+        Extracts tasks/goals from a transcript content string using the Gemini 2.5 Pro LLM.
 
         Args:
             content (str): The transcript content as a string.
-            goal_agent: The LLM agent used to extract goals.
-            stream (bool): Whether to stream the LLM output.
+            llm: Callable LLM instance (Gemini 2.5 Pro) used to extract goals.
+            stream (bool): Placeholder for compatibility; streaming not used here.
 
         Returns:
             list[dict]: List of tasks in format [{"category": "...", "task": "..."}]
         """
         import re, json
 
-        # Create prompt
+        # Create prompt for LLM
         prompt = f"""
         You are an assistant that extracts actionable tasks from a meeting transcript.
         Extract all tasks or goals for the team members, group them into categories if possible,
@@ -77,11 +78,10 @@ class AgentMetrics:
         \"\"\"{content}\"\"\"
         """
 
-        # Run the agent
-        response = goal_agent.run(prompt, stream=stream)
-        output_text = response.content
+        # Get LLM response
+        output_text = llm(prompt)
 
-        # Try to extract JSON from the LLM output
+        # Try to extract JSON from LLM output
         match = re.search(r'(\[.*\]|\{.*\})', output_text, flags=re.DOTALL)
         if match:
             try:
@@ -95,43 +95,90 @@ class AgentMetrics:
         # Fallback: treat each sentence as a task
         sentences = [s.strip() for s in re.split(r'[.!?]\s+', output_text) if s.strip()]
         return [{"category": None, "task": s} for s in sentences]
+    
+    def task_completion_vs_response(
+        self,
+        tasks,
+        agent_response,
+        llm=None,
+        threshold: float = 0.7
+    ):
+        """
+        Evaluate how many tasks are actually completed in the agent's response.
 
-    def task_completion_vs_response(self,tasks, agent_response, threshold=0.7):
+        Args:
+            tasks (list[dict]): Each item like {"task": "string", "category": "..."}.
+            agent_response (str): Full text of the agent's reply.
+            llm: Optional LLM instance used to double-check that a task is truly completed.
+            threshold (float): Cosine similarity threshold for semantic match.
+
+        Returns:
+            tuple: (fraction_completed, results_list)
+                fraction_completed (float) – fraction of tasks completed.
+                results_list (list[dict]) – per-task details with similarity and evidence.
         """
-        Check for each task whether the agent_response contains its content (semantically).
-        Returns fraction of tasks 'completed' and per-task results.
-        """
-        # Split response into chunks (sentences)
+        # Split the response into sentences/chunks
         response_chunks = re.split(r'[.!?]\s+', agent_response)
         response_chunks = [r.strip() for r in response_chunks if r.strip()]
 
-        # Precompute embeddings for response chunks
+        # Pre-compute embeddings
         response_embs = [self.get_embedding(chunk) for chunk in response_chunks]
 
         results = []
         completed_count = 0
 
         for task in tasks:
-            task_emb = self.get_embedding(task['task'])
-            similarities = [self.cosine_similarity_np(task_emb, r_emb) for r_emb in response_embs]
-            max_sim = max(similarities) if similarities else 0
+            task_text = task['task']
+            task_emb = self.get_embedding(task_text)
 
+            # Similarity of this task to every response chunk
+            sims = [self.cosine_similarity(task_emb, r_emb) for r_emb in response_embs]
+
+            if not sims:
+                results.append({
+                    "task": task_text,
+                    "category": task.get("category"),
+                    "completed": False,
+                    "similarity": 0.0,
+                    "evidence": ""
+                })
+                continue
+
+            max_i = int(np.argmax(sims))
+            max_sim = sims[max_i]
+            candidate_text = response_chunks[max_i]
+
+            # Step 1: check semantic similarity
             is_done = max_sim >= threshold
+
+            # Step 2: (optional) ask an LLM to confirm that the chunk
+            # truly indicates task completion
+            if is_done and llm is not None:
+                is_done = self.verify_completion(task_text, candidate_text, llm)
+
             if is_done:
                 completed_count += 1
 
             results.append({
-                "task": task["task"],
-                "category": task.get("category", None),
+                "task": task_text,
+                "category": task.get("category"),
                 "completed": is_done,
-                "similarity": round(max_sim, 3)
+                "similarity": round(max_sim, 3),
+                "evidence": candidate_text
             })
 
-        total_tasks = len(tasks)
-        completion_fraction = completed_count / total_tasks if total_tasks else 0.0
-
-        return completion_fraction, results
-
+        fraction = completed_count / len(tasks) if tasks else 0.0
+        return fraction, results
+    
+    def verify_completion(self, task, candidate_text, llm):
+        prompt = f"""
+        Task: {task}
+        Response excerpt: {candidate_text}
+        Question: Does the response clearly indicate the task is finished
+        (not just planned or mentioned)? Answer strictly 'yes' or 'no'.
+        """
+        return llm(prompt).strip().lower() == "yes"
+    
     def novel_contribution_ratio(
         self,
         prev_round: str,

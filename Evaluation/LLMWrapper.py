@@ -4,7 +4,69 @@ import requests
 import json
 import time
 from pydantic import BaseModel
-import re
+import re 
+import google.genai as genai # Using the older, working package
+import os
+from dotenv import load_dotenv
+import asyncio
+
+class GeminiProWrapper(DeepEvalBaseLLM):
+    """
+    Custom LLM wrapper for Google's Gemini Pro models.
+    """
+    def __init__(
+        self,
+        model: str = "gemini-2.5-pro",
+        **kwargs
+    ):
+        # The model is the string name of the model
+        self.model = model
+        self.kwargs = kwargs
+        
+        # Configure the generative AI client
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY environment variable not found. Please set it in your .env file.") 
+        self.client = genai.Client(api_key=api_key)
+        
+        # Initialize the model
+        self.llm = self.model # Store model name string
+
+    def load_model(self):
+        # Model is loaded during __init__
+        return self.llm
+
+    def generate(self, prompt: str, **kwargs) -> str:
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                # Generate content using the Gemini model
+                # Using the client.chats.create pattern from the older library
+                chat = self.client.chats.create(model=self.llm)
+                response = chat.send_message(prompt)
+                return response.text
+            except Exception as e:
+                # Handle potential API errors
+                error_str = str(e)
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    if attempt < max_retries - 1:
+                        print(f"Rate limit exceeded. Waiting for 60 seconds before retrying...")
+                        time.sleep(60)
+                        continue
+                print(f"Error generating response from Gemini: {e}")
+                return ""
+
+    async def a_generate(self, prompt: str, **kwargs) -> str:
+        # The google.genai client doesn't have a native async method for chat.
+        # We will call the synchronous method in an executor.
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, self.generate, prompt, **kwargs)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def get_model_name(self) -> str:
+        return self.model
 
 class Qwen3OllamaWrapper(DeepEvalBaseLLM):
     """
@@ -405,6 +467,201 @@ Important:
             return []
         
     
+from deepeval.models.base_model import DeepEvalBaseLLM
+from typing import Optional, Union
+from pydantic import BaseModel
+import requests
+import json
+import re
+import os
+from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from types import SimpleNamespace
+class GroqWrapper(DeepEvalBaseLLM):
+    """
+    Custom LLM wrapper for Groq-hosted models (e.g., gpt-oss-120b).
+    API is OpenAI-compatible.
+    """
+
+    def __init__(self, model_name, base_url=None, **kwargs):
+        self.model_name = model_name
+        self.base_url = base_url
+        self.temperature = kwargs.get("temperature", 0.7)
+        self.max_tokens = kwargs.get("max_tokens", 512)
+        self.thinking_mode = kwargs.get("thinking_mode", False)
+
+        self.client = Groq()
+
+    def get_model_name(self):
+        return self.model_name
+
+    def load_model(self):
+        # Just return the model interface (completions endpoint)
+        return self.llm
+
+
+    def generate(self, prompt: str, **kwargs) -> str:
+        """Return just the text for direct calls"""
+        result = self._call_llm(prompt, **kwargs)
+        return result
+
+    def _call_llm(self, prompt: str, test_mode: bool = False, **kwargs):
+        if self.thinking_mode and not test_mode:
+            prompt = f"{prompt}\n[Think step by step]"
+        elif not self.thinking_mode and not test_mode:
+            prompt = f"{prompt}\n[Answer directly]"
+
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=kwargs.get("temperature", self.temperature),
+            max_tokens=kwargs.get("max_tokens", self.max_tokens),
+        )
+
+        content = response.choices[0].message.content.strip()
+
+        # return object instead of plain string
+        return SimpleNamespace(
+            output=content,
+            steps=[]  # you can later fill reasoning steps if available
+        )
+
+    def _generate_with_schema(
+        self, prompt: str, schema: BaseModel, **kwargs
+    ) -> BaseModel:
+        schema_prompt = f"""
+        {prompt}
+
+        Please respond ONLY with valid JSON that matches this schema:
+        {json.dumps(schema.model_json_schema(), indent=2)}
+        """
+        response_text = self._call_llm(schema_prompt, **kwargs)
+        try:
+            cleaned = self._clean_json_response(response_text)
+            response_dict = json.loads(cleaned)
+            return schema(**response_dict)
+        except Exception as e:
+            print(f"Schema parse error: {e}")
+            return self._create_fallback_response(schema, response_text)
+
+    def _clean_json_response(self, response_text: str) -> str:
+        cleaned = response_text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`").replace("json", "", 1).strip()
+        first_brace = cleaned.find("{")
+        last_brace = cleaned.rfind("}")
+        if first_brace != -1 and last_brace != -1:
+            return cleaned[first_brace : last_brace + 1]
+        return cleaned
+
+    def _create_fallback_response(self, schema: BaseModel, response_text: str) -> BaseModel:
+        """Create a fallback response when JSON parsing fails"""
+        try:
+            schema_fields = schema.model_fields
+            fallback_data = {}
+            
+            # Handle common DeepEval schemas based on field names
+            if 'steps' in schema_fields:
+                # This is likely a Steps schema for GEval
+                fallback_data['steps'] = [response_text] if response_text else ["Unable to evaluate"]
+                
+            elif 'verdict' in schema_fields:
+                # This is likely a Verdicts schema
+                verdict_keywords = ['yes', 'true', 'correct', 'good', 'pass']
+                fallback_data['verdict'] = 'yes' if any(keyword in response_text.lower() for keyword in verdict_keywords) else 'no'
+                if 'reason' in schema_fields:
+                    fallback_data['reason'] = response_text or "No reason provided"
+                    
+            elif 'score' in schema_fields:
+                # This is likely a score-based schema
+                # Try to extract a number from the response
+                numbers = re.findall(r'\d+\.?\d*', response_text)
+                if numbers:
+                    try:
+                        score = float(numbers[0])
+                        # Ensure score is within reasonable bounds (0-10)
+                        score = max(0, min(10, score))
+                        fallback_data['score'] = score
+                    except ValueError:
+                        fallback_data['score'] = 5.0
+                else:
+                    fallback_data['score'] = 5.0  # Default middle score
+                    
+                if 'reason' in schema_fields:
+                    fallback_data['reason'] = response_text or "No detailed reasoning provided"
+                    
+            elif 'reason' in schema_fields:
+                # Generic reason-based schema
+                fallback_data['reason'] = response_text or "No reasoning provided"
+            
+            # Handle any remaining required fields
+            for field_name, field_info in schema_fields.items():
+                if field_name not in fallback_data:
+                    # Get the field type
+                    field_type = field_info.annotation
+                    
+                    # Handle different field types
+                    if field_type == str or str(field_type) == "<class 'str'>":
+                        fallback_data[field_name] = response_text or "No response"
+                    elif field_type == int or str(field_type) == "<class 'int'>":
+                        fallback_data[field_name] = 5
+                    elif field_type == float or str(field_type) == "<class 'float'>":
+                        fallback_data[field_name] = 5.0
+                    elif field_type == bool or str(field_type) == "<class 'bool'>":
+                        fallback_data[field_name] = True
+                    elif hasattr(field_type, '__origin__') and field_type.__origin__ == list:
+                        fallback_data[field_name] = [response_text] if response_text else []
+                    else:
+                        fallback_data[field_name] = response_text or "Default value"
+            
+            return schema(**fallback_data)
+            
+        except Exception as e:
+            print(f"Fallback creation failed: {e}")
+            # Last resort: create minimal valid instance
+            try:
+                # Try to create with default values for all fields
+                default_data = {}
+                for field_name, field_info in schema.model_fields.items():
+                    field_type = field_info.annotation
+                    
+                    if field_type == str:
+                        default_data[field_name] = "Default response"
+                    elif field_type == int:
+                        default_data[field_name] = 5
+                    elif field_type == float:
+                        default_data[field_name] = 5.0
+                    elif field_type == bool:
+                        default_data[field_name] = True
+                    elif hasattr(field_type, '__origin__') and field_type.__origin__ == list:
+                        default_data[field_name] = ["Default"]
+                    else:
+                        default_data[field_name] = "Default"
+                
+                return schema(**default_data)
+                
+            except Exception as final_e:
+                print(f"Final fallback failed: {final_e}")
+                # If all else fails, try empty construction
+                return schema()
+
+
+    async def a_generate(
+        self, prompt: str, schema: Optional[BaseModel] = None, **kwargs
+    ) -> Union[str, BaseModel]:
+        import asyncio
+
+        return await asyncio.get_event_loop().run_in_executor(
+            None, self.generate, prompt, schema
+        )
+
+
+def create_groq_wrapper(**kwargs) -> GroqWrapper:
+    return GroqWrapper(model_name="openai/gpt-oss-120b", **kwargs)
+
 def create_qwen3_8b_wrapper(**kwargs) -> Qwen3OllamaWrapper:
     """Create wrapper for Qwen3 8B model (default)"""
     return Qwen3OllamaWrapper(model_name="qwen3:8b", **kwargs)
@@ -472,5 +729,106 @@ def test_qwen3_structured_output():
         import traceback
         traceback.print_exc()
 
+def test_gemini_wrapper():
+    """Test the GeminiProWrapper"""
+    print("🧪 Testing GeminiPro Wrapper...")
+    load_dotenv() # Make sure API key is loaded from .env
+
+    try:
+        # Create wrapper
+        gemini = GeminiProWrapper(model="gemini-2.5-pro")
+        
+        # Test basic functionality
+        prompt = "Explain the concept of a 'digital twin' in one paragraph."
+        
+        print(f"\n📝 Prompt: {prompt}")
+        response = gemini.generate(prompt)
+        print(f"🤖 Gemini Response: {response[:300]}...")
+
+    except Exception as e:
+        print(f"❌ Error during Gemini test: {e}")
+        import traceback
+        traceback.print_exc()
+
+async def test_gemini_wrapper_async():
+    """Test the async generation of GeminiProWrapper"""
+    print("\n🧪 Testing GeminiPro Wrapper (Async)...")
+    load_dotenv()
+
+    try:
+        gemini = GeminiProWrapper(model="gemini-2.5-pro")
+        prompt = "What are the key differences between the 'google.generativeai' and 'google.genai' Python packages?"
+        
+        print(f"\n📝 Async Prompt: {prompt}")
+        response = await gemini.a_generate(prompt)
+        print(f"🤖 Gemini Async Response: {response[:300]}...")
+
+    except Exception as e:
+        print(f"❌ Error during async Gemini test: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+
+def test_groq_wrapper():
+    """Test the Groq wrapper"""
+    print("🧪 Testing Groq Wrapper...")
+    
+    groq_llm = GroqWrapper(model_name="openai/gpt-oss-120b", temperature=0.2, max_tokens=2000)  
+    
+    test_prompts = [
+        "What is 5+7?",
+        "Explain black holes in simple terms",
+        "Write a Python function to check if a number is prime"
+    ]
+    
+    for prompt in test_prompts:
+        print(f"\n📝 Prompt: {prompt}")
+        try:
+            response = groq_llm.generate(prompt)
+            print(f"🤖 Groq Response: {response[:200]}...")
+        except Exception as e:
+            print(f"❌ Error: {e}")
+
+
+def test_groq_structured_output():
+    """Test the Groq wrapper with structured outputs"""
+    
+    class TestSchema(BaseModel):
+        score: float
+        reason: str
+        verdict: Optional[str] = "unknown"
+    
+    groq_llm = GroqWrapper(model_name="openai/gpt-oss-120b", temperature=0.2, max_tokens=2000)
+    
+    prompt = "Rate this response from 1-10: 'The sun is hot because of nuclear fusion.'"
+    
+    try:
+        # Test structured
+        structured_response = groq_llm.generate(prompt, schema=TestSchema)
+        print(f"Structured response: {structured_response}")
+        print(f"Score: {structured_response.score}")
+        print(f"Reason: {structured_response.reason}")
+        print(f"Verdict: {structured_response.verdict}")
+        
+        # Test plain text
+        text_response = groq_llm.generate(prompt)
+        print(f"Text response: {text_response}")
+        
+    except Exception as e:
+        print(f"Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+        
 if __name__ == "__main__":
+    #test_gemini_wrapper()
+    #asyncio.run(test_gemini_wrapper_async())
     test_qwen3_structured_output()
+    print("\n\n")
+    print("----------------------------------------------")
+    #groq_eval=GroqWrapper(model_name="openai/gpt-oss-120b", temperature=0.2, max_tokens=2000)
+    #test_groq_wrapper()
+    #test_groq_structured_output()
+    #response=groq_eval.generate("Explain the concept of a 'digital twin' in one paragraph.")
+    #print(response)
