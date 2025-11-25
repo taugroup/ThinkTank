@@ -1,12 +1,14 @@
 from __future__ import annotations
 import concurrent.futures
+import os
 
 from pathlib import Path
 from typing import Dict, List, Any
 import json
 import time
 import base64
-
+from datetime import datetime
+import ast
 import streamlit as st
 
 from agent_builder import build_local_agent
@@ -86,7 +88,7 @@ def build_custom_thinktank(project_desc: str, scientists: List[Dict[str, str]]) 
                 name=sd["title"],
                 description=f"Expertise: {sd['expertise']}. Goal: {sd['goal']}",
                 role=sd["role"],
-                memory=lab._memory,
+                memory=None,
                 storage=lab._storage,
                 tools=tools,
             )
@@ -98,6 +100,42 @@ def write(name: str, content: str):
         st.session_state.markdown_log.append(f"## 🧑‍🔬 {name} \n")
         st.markdown(content)
         st.session_state.markdown_log.append(content)
+
+def default_serializer(obj):
+    """Fallback serializer for JSON encoding."""
+    if hasattr(obj, "dict"):       # Pydantic models
+        return obj.dict()
+    if hasattr(obj, "model_dump"): # Pydantic v2
+        return obj.model_dump()
+    if hasattr(obj, "__dict__"):   # Generic Python objects
+        return obj.__dict__
+    return str(obj)  # Final fallback
+
+def save_response(response, filename_prefix="agent_response", project_name=None):
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create project folder if project_name is provided
+    if project_name:
+        project_folder = clean_name(project_name)
+        os.makedirs(project_folder, exist_ok=True)
+        filename = os.path.join(project_folder, f"{filename_prefix}_{ts}.json")
+    else:
+        filename = f"{filename_prefix}_{ts}.json"
+
+    try:
+        with open(filename, "w", encoding="utf-8") as f:
+            # messages=response.messages
+            # collected = []
+            # for message in messages:
+            #     if message.role == "tool" and message.tool_name == "retrieve_documents":
+            #         retrieved_data_str = message.content
+            #         retrieved_data = ast.literal_eval(retrieved_data_str)
+            #         collected.append(retrieved_data)
+
+            json.dump(response, f, ensure_ascii=False, indent=2, default=default_serializer)
+        print(f"✅ Saved response to {filename}")
+    except Exception as e:
+        print(f"⚠️ Failed to save response: {e}")
 
 def run_thinktank_meeting(
     project_name: str,
@@ -137,12 +175,13 @@ def run_thinktank_meeting(
         write(name, content)
 
     # PI opening
-    pi_open = lab.pi.run(
+    pi_open_response = lab.pi.run(
         f"You are convening a team meeting. Agenda: {meeting_topic}. Share initial guidance to the scientists..",
         stream=False,
-    ).content
+    )
+    pi_open = pi_open_response.content
     log(lab.pi.name, pi_open)
-
+    save_response(pi_open_response, filename_prefix=f"{lab.pi.name}_opening", project_name=project_name)
     # Discussion rounds 
     for r in range(1, rounds + 1):
         st.markdown(f"### 🔄 Round {r}/{rounds}")
@@ -173,17 +212,19 @@ def run_thinktank_meeting(
                 Your goal is to leverage the retrieved knowledge to solve the task accurately and completely.
             """
 
-            resp = sci.run(
+            response = sci.run(
                 f"{tool_prompt}\n\nGive your contribution for round {r}:",
                 stream=False,
-            ).content
+            )
+            resp = response.content
             lab._log("scientist", sci.name, resp)
             log(sci.name, resp)
-
+            save_response(response, filename_prefix=f"{sci.name}_{r}_response", project_name=project_name)
         crit = lab.critic.run(
             f"Context so far:\n{lab._context()}\n\nCritique round {r}",
             stream=False,
         ).content
+        save_response(crit, filename_prefix=f"{lab.critic.name}_critique", project_name=project_name)
         lab._log("critic", lab.critic.name, crit)
         log(lab.critic.name, crit)
 
@@ -193,20 +234,21 @@ def run_thinktank_meeting(
         ).content
         lab._log("pi", lab.pi.name, synth)
         log(lab.pi.name + " (synthesis)", synth)
-
+        save_response(synth, filename_prefix=f"{lab.pi.name}_synthesis", project_name=project_name)
     # Final summary
     summary = lab.pi.run(
         f"Context so far:\n{lab._context()}\n\nProvide the final detailed meeting summary and recommendations.",
         stream=False,
     ).content
     lab._log("pi", lab.pi.name, summary)
-
+    save_response(summary, filename_prefix=f"{lab.pi.name}_final_summary", project_name=project_name)
     st.subheader("📝 Final Meeting Summary")
     st.session_state.markdown_log.append("📝 Final Meeting Summary")
     st.markdown(summary)
     st.session_state.markdown_log.append(summary)
 
-    lab._memory.add_user_memory(memory=UserMemory(memory=summary), user_id=project_name)
+    # Memory is now handled automatically by the agent's storage
+    # lab._memory.add_user_memory(memory=UserMemory(memory=summary), user_id=project_name)
 
 
     # Save to DB

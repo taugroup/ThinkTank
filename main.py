@@ -360,13 +360,12 @@ async def meeting_ws(websocket: WebSocket):
     lab = ThinkTank(project_desc)
     lab.scientists.clear()
     tools = [retrieve_documents]
-    for sd in req.experts:
-        lab.scientists.append(
+    for sd in req.experts:            lab.scientists.append(
             build_local_agent(
                 name=sd.title,
                 description=f"Expertise: {sd.expertise}. Goal: {sd.goal}",
                 role=sd.role,
-                memory=lab._memory,
+                memory=None,
                 storage=lab._storage,
                 tools=tools,
             )
@@ -448,7 +447,8 @@ async def meeting_ws(websocket: WebSocket):
         # transcript.append({"name": "FINAL SUMMARY", "content": summary})
 
         # persist memory & save project
-    lab._memory.add_user_memory(memory=UserMemory(memory=summary), user_id=req.project_name)
+    # Memory is now handled automatically by the agent's storage
+    # lab._memory.add_user_memory(memory=UserMemory(memory=summary), user_id=req.project_name)
     proj = projects_db.setdefault(req.project_name, {
         "title": req.project_name,
         "description": project_desc,

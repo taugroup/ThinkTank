@@ -110,7 +110,8 @@ def _docx_bytes(project_name: str,
 
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
         tmp_path = tmp.name
-    pypandoc.convert_text(full_md, to="docx", format="md", outputfile=tmp_path)
+    # Disable YAML metadata block parsing to avoid conflicts with --- separators
+    pypandoc.convert_text(full_md, to="docx", format="markdown-yaml_metadata_block", outputfile=tmp_path)
 
     doc = Document(tmp_path)
     for table in doc.tables:
