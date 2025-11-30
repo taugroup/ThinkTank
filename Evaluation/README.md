@@ -488,7 +488,7 @@ If you use the ThinkTank Evaluation system in your research, please cite:
 
 ## Team
 
-- **Developers**: Praneet Sai Madhu Surabhi, Dheeraj Mudireddy (MS Data Science '25, TAU Group)
+- Praneet Sai Madhu Surabhi, Dheeraj Mudireddy, Sujith Julakanti (MS Data Science '25, TAU Group)
 - **Advisor**: Prof. Dr. Jian Tao (Asst. Dir. of TAMIDS, Dir. of Digital Twin Lab)
 
 ## License
