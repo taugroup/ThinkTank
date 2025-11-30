@@ -16,7 +16,11 @@ def retrieve_documents(queries: List[str], collection_name: str) -> List[str]:
         collection_name (str): Name of the collection in ChromaDB.
 
     Returns:
-        List (List[Tuple[str, str, str]]): List of (document_id, document_text, source_metadata).
+        dict: {
+            'query_list': List[str],           # The input queries
+            'context': List[str],              # List of document texts
+            'retrieved_docs': List[dict]       # List of dicts with 'text' and 'source'
+        }
     """
     logger.info("Performing retrieval...")
     db = ChromaDBConnection(DB_PATH)
@@ -57,5 +61,10 @@ def retrieve_documents(queries: List[str], collection_name: str) -> List[str]:
     #     websocket.send_json({'name': f'- {source}', 'content': ''})
 
 
-    dense_results = [result['text'] for result in dense_results]
-    return dense_results
+    # Keep full document objects for tool call output
+    tool_output = {
+        'query_list': queries,
+        'context': [result['text'] for result in dense_results],
+        'retrieved_docs': dense_results  # Include full document objects with text and source
+    }
+    return tool_output

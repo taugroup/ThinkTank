@@ -1,7 +1,7 @@
 from typing import Optional
 from agno.agent import Agent
 from agno.models.ollama import Ollama
-from agno.memory.v2.memory import Memory
+from agno.memory import Memory
 from agno.storage.sqlite import SqliteStorage
 
 def build_local_agent(

@@ -8,7 +8,13 @@ import time
 import json
 import concurrent.futures
 from LLMWrapper import Qwen3OllamaWrapper
+from LLMWrapper import GeminiProWrapper, GroqWrapper
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+
+gemini_api_key = os.getenv("GEMINI_API_KEY")
 # class AgentCollaborationMetric(GEval):
 #     def __init__(self, model):
 #         super().__init__(
@@ -111,15 +117,60 @@ class Qwen3MeetingEvaluationManager:
         # Initialize thread pool for parallel evaluation
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
         
-        # Initialize Qwen3 evaluator
-        self.qwen3_evaluator = Qwen3OllamaWrapper(
-            model_name="qwen3:8b",
-            base_url=ollama_base_url,
-            thinking_mode=True,  # Enable deep reasoning for evaluation
-            temperature=0.1,     # Low temperature for consistent evaluation
-            max_tokens=2000      # Longer responses for detailed evaluation
-        )
-
+        # Initialize evaluators with fallback options
+        self.primary_evaluator = None
+        self.fallback_evaluator = None
+        
+        # Try to initialize Gemini first (most reliable)
+        try:
+            self.gemini_evaluator = GeminiProWrapper(
+                temperature=0.1,
+                max_tokens=2000
+            )
+            self.primary_evaluator = self.gemini_evaluator
+            print("✅ Primary evaluator: Gemini 2.5 Flash")
+        except Exception as e:
+            print(f"⚠️ Gemini evaluator failed: {e}")
+        
+        # Try Groq as fallback
+        try:
+            self.groq_evaluator = GroqWrapper(
+                model_name="llama-3.1-70b-versatile",  # More reliable model
+                thinking_mode=False,    # Disable for stability
+                temperature=0.1,
+                max_tokens=2000
+            )
+            if not self.primary_evaluator:
+                self.primary_evaluator = self.groq_evaluator
+            else:
+                self.fallback_evaluator = self.groq_evaluator
+            print("✅ Groq evaluator initialized")
+        except Exception as e:
+            print(f"⚠️ Groq evaluator failed: {e}")
+        
+        # Try Qwen3 as last resort (requires local setup)
+        try:
+            self.qwen3_evaluator = Qwen3OllamaWrapper(
+                model_name="qwen3:8b",
+                base_url=ollama_base_url,
+                thinking_mode=True,
+                temperature=0.1,
+                max_tokens=2000
+            )
+            if not self.primary_evaluator:
+                self.primary_evaluator = self.qwen3_evaluator
+            elif not self.fallback_evaluator:
+                self.fallback_evaluator = self.qwen3_evaluator
+            print("✅ Qwen3 evaluator initialized")
+        except Exception as e:
+            print(f"⚠️ Qwen3 evaluator failed: {e}")
+        
+        if not self.primary_evaluator:
+            raise Exception("No evaluators could be initialized. Please check your API keys and setup.")
+        
+        print(f"🎯 Using primary evaluator: {type(self.primary_evaluator).__name__}")
+        if self.fallback_evaluator:
+            print(f"🔄 Fallback evaluator: {type(self.fallback_evaluator).__name__}")
         # Initialize evaluation metrics with Qwen3
         self._setup_evaluation_metrics()
         
@@ -133,20 +184,48 @@ class Qwen3MeetingEvaluationManager:
         self.collaboration_metric = GEval(
             name="Agent Collaboration Quality",
             criteria="""
-            Evaluate how well agents collaborate in the multi-agent system:
-            1. Information Flow: Do agents effectively build upon previous responses?
-            2. Role Adherence: Does each agent stay within their expertise area?
-            3. Knowledge Integration: Are specialized knowledge bases utilized appropriately?
-            4. Coherence: Does the conversation flow logically from one agent to the next?
-            5. Redundancy Avoidance: Do agents avoid repeating information unnecessarily?
-            
-            Rate from 1-100 where 100 is excellent collaboration.
+            Evaluate the quality of collaboration between agents in this multi-agent system across five dimensions:
+
+            1. INFORMATION FLOW (20 points)
+            - Do agents acknowledge and reference previous agents' contributions?
+            - Is there clear context passing between agents?
+            - Do later agents build upon earlier insights rather than starting fresh?
+
+            2. ROLE ADHERENCE (20 points)
+            - Does each agent operate within their designated domain expertise?
+            - Are there clear boundaries between agent responsibilities?
+            - Do agents avoid overstepping into other agents' specialized areas?
+
+            3. KNOWLEDGE INTEGRATION (20 points)
+            - Are domain-specific knowledge bases correctly utilized?
+            - Do agents leverage their specialized tools and resources appropriately?
+            - Is expert knowledge applied accurately to relevant parts of the task?
+
+            4. CONVERSATIONAL COHERENCE (20 points)
+            - Does the multi-agent dialogue follow a logical progression?
+            - Are transitions between agents smooth and purposeful?
+            - Is there a clear narrative thread throughout the interaction?
+
+            5. REDUNDANCY AVOIDANCE (20 points)
+            - Do agents avoid repeating information already provided?
+            - Is there unnecessary overlap in agent responses?
+            - Does each agent add unique value to the conversation?
+
+            SCORING GUIDELINES:
+            - 90-100: Exceptional collaboration with seamless integration
+            - 75-89: Strong collaboration with minor gaps
+            - 60-74: Adequate collaboration with noticeable issues
+            - 40-59: Poor collaboration with significant problems
+            - 0-39: Minimal or counterproductive collaboration
+
+            Provide a score from 0-100 based on the overall collaboration quality observed in the agent interactions.
+
             """,
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator,
+            model=self.primary_evaluator,
             threshold=0.6,
             strict_mode=False
         )
@@ -155,19 +234,66 @@ class Qwen3MeetingEvaluationManager:
         self.role_adherence_metric = GEval(
             name="Agent Role Adherence",
             criteria="""
-            Evaluate whether each agent stays within their defined role and expertise:
-            1. Expertise Boundaries: Does the agent only provide information within their domain?
-            2. Role Consistency: Does the agent maintain their assigned role throughout?
-            3. Knowledge Source Usage: Does the agent appropriately reference their expertise?
-            4. Goal Alignment: Are the agent's responses aligned with their stated goals?
-            
-            Rate from 1-100 where 100 is perfect role adherence.
+                Evaluate how well the agent maintains their defined role and expertise boundaries.
+                
+                AGENT ROLE PROFILE (from context):
+                Compare all responses against the agent's defined role, expertise domain, and objectives.
+
+                EVALUATION DIMENSIONS:
+
+                1. EXPERTISE BOUNDARIES (30 points)
+                Assessment:
+                - ✓ Agent provides information only within designated domain
+                - ✓ Agent acknowledges limitations when questions exceed expertise
+                - ✓ Agent redirects or defers to appropriate specialists when needed
+                - ✗ Agent attempts to answer questions outside their domain
+                - ✗ Agent provides speculative information beyond their knowledge base
+                
+                Examples of violations:
+                - A medical agent discussing legal implications
+                - A financial agent providing technical engineering advice
+                - A customer service agent making executive business decisions
+
+                2. ROLE CONSISTENCY (25 points)
+                Assessment:
+                - ✓ Maintains consistent persona and communication style
+                - ✓ Adheres to defined behavioral parameters (formal/informal, technical/accessible)
+                - ✓ Demonstrates consistent decision-making patterns aligned with role
+                - ✗ Shifts tone or approach inappropriately
+                - ✗ Acts outside defined authority levels
+
+                3. KNOWLEDGE SOURCE USAGE (25 points)
+                Assessment:
+                - ✓ References or implicitly uses designated knowledge bases
+                - ✓ Demonstrates deep, accurate domain knowledge
+                - ✓ Uses domain-specific terminology appropriately
+                - ✓ Cites sources or expertise when applicable
+                - ✗ Makes claims without grounding in their knowledge domain
+                - ✗ Misuses or misrepresents domain concepts
+
+                4. GOAL ALIGNMENT (20 points)
+                Assessment:
+                - ✓ All responses serve the agent's defined objectives
+                - ✓ Prioritizes tasks according to role's mission
+                - ✓ Recommendations align with agent's stated purpose
+                - ✗ Pursues goals outside the agent's mandate
+                - ✗ Provides advice contradicting the agent's objectives
+
+                SCORING RUBRIC:
+                90-100: Exemplary - Flawless role adherence, perfect boundaries
+                80-89: Excellent - Strong adherence with negligible deviations
+                70-79: Good - Mostly consistent with minor boundary issues
+                60-69: Adequate - Notable lapses but generally stays in role
+                50-59: Concerning - Frequent role violations affecting quality
+                Below 50: Unacceptable - Substantial role confusion or overreach
+
+                Consider the severity and frequency of violations when scoring.
             """,
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator,
+            model=self.primary_evaluator,
             threshold=0.6,
             strict_mode=False
         )
@@ -176,21 +302,99 @@ class Qwen3MeetingEvaluationManager:
         self.response_quality_metric = GEval(
             name="Agent Response Quality",
             criteria="""
-            Evaluate the quality of the agent's response in the meeting context:
-            1. Expertise Demonstration: Does the response show domain knowledge and expertise?
-            2. Context Awareness: Does the agent build upon previous discussion points?
-            3. Information Value: Does the response add new, actionable insights?
-            4. Clarity and Structure: Is the response well-organized and easy to follow?
-            5. Actionability: Does the response provide practical, implementable information?
+            Evaluate the overall quality of the agent's response in the meeting context across five key dimensions.
+
+            1. EXPERTISE DEMONSTRATION (20 points)
+            - Does the response demonstrate deep domain knowledge and specialized expertise?
+            - Are technical concepts explained accurately and with appropriate depth?
+            - Does the agent use domain-specific terminology correctly and confidently?
+            - Is the information current and reflects best practices in the field?
+            - Are claims supported by evidence or professional experience?
             
-            Rate from 1-100 where 100 is exceptional quality.
+            Indicators of strong expertise:
+            ✓ Specific examples, data, or case studies
+            ✓ Nuanced understanding of complex issues
+            ✓ Anticipation of follow-up questions
+            ✗ Vague generalizations without substance
+            ✗ Surface-level understanding of domain topics
+
+            2. CONTEXT AWARENESS (20 points)
+            - Does the agent acknowledge and reference previous discussion points?
+            - Is there clear awareness of the meeting's progression and objectives?
+            - Does the response address unstated implications from earlier contributions?
+            - Are connections made between this response and other agents' inputs?
+            - Is the response appropriately timed within the meeting flow?
+            
+            Indicators of strong context awareness:
+            ✓ References to specific prior statements
+            ✓ Builds on or challenges previous ideas constructively
+            ✓ Addresses gaps identified in earlier discussion
+            ✗ Ignores relevant previous information
+            ✗ Repeats points already covered
+
+            3. INFORMATION VALUE (20 points)
+            - Does the response introduce new, meaningful insights?
+            - Is the information directly relevant to the meeting's objectives?
+            - Does it advance the discussion or decision-making process?
+            - Is there a good signal-to-noise ratio (substance vs. filler)?
+            - Does it help resolve questions or clarify uncertainties?
+            
+            Indicators of high information value:
+            ✓ Novel perspectives or solutions
+            ✓ Critical information that changes understanding
+            ✓ Addresses specific gaps in knowledge
+            ✗ Redundant or already-known information
+            ✗ Off-topic tangents or irrelevant details
+
+            4. CLARITY AND STRUCTURE (20 points)
+            - Is the response logically organized with clear flow?
+            - Are complex ideas broken down into digestible components?
+            - Is the language appropriate for the audience?
+            - Are key points highlighted or emphasized effectively?
+            - Is the response concise while remaining comprehensive?
+            
+            Indicators of strong clarity:
+            ✓ Clear topic sentences and transitions
+            ✓ Effective use of examples or analogies
+            ✓ Appropriate length for the content
+            ✗ Rambling or disorganized presentation
+            ✗ Overly technical jargon without explanation
+
+            5. ACTIONABILITY (20 points)
+            - Does the response provide concrete, implementable recommendations?
+            - Are next steps or action items clearly identified?
+            - Is the guidance specific enough to act upon?
+            - Are practical constraints and feasibility considered?
+            - Does it include success metrics or evaluation criteria when appropriate?
+            
+            Indicators of high actionability:
+            ✓ Specific recommendations with clear steps
+            ✓ Consideration of resources and timelines
+            ✓ Risk assessment and mitigation strategies
+            ✗ Abstract advice without practical application
+            ✗ Suggestions lacking detail for implementation
+
+            SCORING GUIDELINES:
+            90-100: Exceptional - Outstanding quality across all dimensions
+            80-89: Excellent - Strong performance with minor areas for improvement
+            70-79: Good - Solid response meeting most quality criteria
+            60-69: Adequate - Acceptable but with notable weaknesses
+            50-59: Below Average - Significant gaps in multiple dimensions
+            Below 50: Poor - Fails to meet basic quality standards
+
+            HOLISTIC CONSIDERATIONS:
+            - Consider the cumulative impact of the response on meeting outcomes
+            - Assess whether the response advances or hinders progress
+            - Evaluate the professional appropriateness for the context
+            
+            Provide a score from 0-100 reflecting the overall response quality.
             """,
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator,
-            threshold=0.6,
+            model=self.primary_evaluator,
+            threshold=0.7,  # Consider raising threshold for quality metric
             strict_mode=False
         )
         
@@ -198,21 +402,181 @@ class Qwen3MeetingEvaluationManager:
         self.meeting_progress_metric = GEval(
             name="Meeting Progress Assessment",
             criteria="""
-            Evaluate how well the meeting is progressing toward its objectives:
-            1. Topic Focus: Are responses staying relevant to the meeting agenda?
-            2. Collaborative Building: Are agents building on each other's contributions?
-            3. Problem Solving: Is the discussion moving toward solutions and decisions?
-            4. Knowledge Integration: Are different expertise areas being combined effectively?
-            5. Decision Support: Does the response provide information that aids decision-making?
+            Evaluate how effectively the meeting is progressing toward achieving its stated objectives.
             
-            Rate from 1-100 where 100 is excellent progress toward meeting goals.
+            PROGRESS EVALUATION FRAMEWORK:
+
+            1. TOPIC FOCUS AND AGENDA ALIGNMENT (20 points)
+            - Are responses directly addressing current agenda items?
+            - Is the discussion staying on track without unnecessary tangents?
+            - Are time allocations being respected for each topic?
+            - Is there clear progression through planned discussion points?
+            
+            Excellent Progress (18-20):
+            ✓ All responses directly address agenda items
+            ✓ No off-topic digressions
+            ✓ Clear advancement through meeting structure
+            ✓ Appropriate depth for each agenda topic
+            
+            Good Progress (14-17):
+            ✓ Most responses are agenda-relevant
+            ✓ Minor tangents quickly redirected
+            ✓ Generally following meeting structure
+            
+            Moderate Progress (10-13):
+            ⚠ Some off-topic discussions
+            ⚠ Agenda loosely followed
+            ⚠ Pacing issues evident
+            
+            Poor Progress (0-9):
+            ✗ Frequent off-topic discussions
+            ✗ Agenda largely ignored
+            ✗ Disorganized flow
+
+            2. COLLABORATIVE BUILDING (20 points)
+            - Do agents explicitly reference and build upon prior contributions?
+            - Are ideas synthesized across multiple perspectives?
+            - Is there constructive challenge and refinement of concepts?
+            - Are synergies between different viewpoints identified?
+            - Is consensus or productive disagreement emerging?
+            
+            Excellent Progress (18-20):
+            ✓ Consistent referencing of previous points ("Building on Sarah's analysis...")
+            ✓ Ideas are refined and enhanced through collaboration
+            ✓ Cross-functional insights integrated seamlessly
+            ✓ Clear convergence toward shared understanding
+            
+            Good Progress (14-17):
+            ✓ Regular acknowledgment of others' contributions
+            ✓ Some synthesis of ideas
+            ✓ Constructive dialogue present
+            
+            Moderate Progress (10-13):
+            ⚠ Occasional building on others' ideas
+            ⚠ Mostly parallel contributions rather than integrated
+            ⚠ Limited cross-pollination of perspectives
+            
+            Poor Progress (0-9):
+            ✗ Isolated contributions without connection
+            ✗ No synthesis or integration
+            ✗ Competing rather than collaborative
+
+            3. PROBLEM SOLVING AND SOLUTION DEVELOPMENT (25 points)
+            - Is the discussion moving from problem identification to solutions?
+            - Are concrete options and alternatives being generated?
+            - Is critical analysis being applied to proposed solutions?
+            - Are obstacles being identified and addressed?
+            - Is progress visible from exploration to decision-readiness?
+            
+            Excellent Progress (22-25):
+            ✓ Clear progression: problem → analysis → options → evaluation → recommendation
+            ✓ Multiple viable solutions identified and assessed
+            ✓ Obstacles proactively addressed with mitigation strategies
+            ✓ Action items and next steps crystallizing
+            ✓ Group moving toward actionable conclusions
+            
+            Good Progress (17-21):
+            ✓ Problem-solving framework evident
+            ✓ Some solutions proposed and discussed
+            ✓ Moving toward actionable outcomes
+            
+            Moderate Progress (10-16):
+            ⚠ Problem exploration without clear solutions
+            ⚠ Solutions mentioned but not fully developed
+            ⚠ Slow progress toward decisions
+            
+            Poor Progress (0-9):
+            ✗ Stuck in problem identification phase
+            ✗ No solutions proposed
+            ✗ Discussion circular or regressive
+
+            4. KNOWLEDGE INTEGRATION (20 points)
+            - Are different domains of expertise being combined effectively?
+            - Is specialized knowledge from various agents being synthesized?
+            - Are technical, business, and operational perspectives balanced?
+            - Is the collective intelligence greater than individual contributions?
+            - Are knowledge gaps being identified and filled?
+            
+            Excellent Progress (18-20):
+            ✓ Seamless integration of multi-disciplinary insights
+            ✓ Holistic solutions drawing from all expertise areas
+            ✓ Knowledge gaps identified and addressed in real-time
+            ✓ Synergistic combination creating novel insights
+            
+            Good Progress (14-17):
+            ✓ Multiple expertise areas represented
+            ✓ Some cross-domain integration
+            ✓ Reasonably comprehensive perspective
+            
+            Moderate Progress (10-13):
+            ⚠ Expertise areas present but siloed
+            ⚠ Limited cross-functional integration
+            ⚠ Some knowledge gaps unaddressed
+            
+            Poor Progress (0-9):
+            ✗ Single perspective dominating
+            ✗ No integration of different knowledge domains
+            ✗ Significant knowledge gaps
+
+            5. DECISION SUPPORT AND CLARITY (15 points)
+            - Does the discussion provide clear information for decision-making?
+            - Are options, trade-offs, and implications clearly articulated?
+            - Are success criteria and evaluation metrics defined?
+            - Is the path to decision or action becoming clearer?
+            - Are accountability and ownership being established?
+            
+            Excellent Progress (14-15):
+            ✓ Clear decision framework established
+            ✓ Options with pros/cons/implications articulated
+            ✓ Specific metrics and success criteria defined
+            ✓ Ownership and accountability clear
+            ✓ Ready for decision or action
+            
+            Good Progress (11-13):
+            ✓ Decision-relevant information provided
+            ✓ Some options and trade-offs discussed
+            ✓ Path forward becoming apparent
+            
+            Moderate Progress (7-10):
+            ⚠ Some decision-support information present
+            ⚠ Incomplete picture for decision-making
+            ⚠ Unclear path to action
+            
+            Poor Progress (0-6):
+            ✗ Insufficient information for decisions
+            ✗ No clear options or path forward
+            ✗ Confusion about next steps
+
+            OVERALL MEETING MOMENTUM ASSESSMENT:
+            
+            Consider these holistic factors:
+            - Is energy/engagement increasing or decreasing?
+            - Are we closer to meeting objectives than at the start?
+            - Would stakeholders feel this was productive time spent?
+            - Is there clear value being created?
+            
+            SCORING GUIDELINES:
+            90-100: Outstanding Progress - Meeting highly effective, objectives being achieved
+            80-89: Strong Progress - Clear advancement, minor areas could be more efficient
+            70-79: Good Progress - Solid advancement, some inefficiencies present
+            60-69: Adequate Progress - Moving forward but with notable issues
+            50-59: Slow Progress - Minimal advancement, significant improvements needed
+            Below 50: Poor Progress - Meeting ineffective, not achieving objectives
+
+            PENALTY FACTORS (deduct from total):
+            - Circular discussions revisiting same points (-5 to -10)
+            - Unresolved conflicts blocking progress (-10 to -15)
+            - Critical stakeholders not engaged (-5 to -10)
+            - Meeting objectives being forgotten (-10 to -20)
+            
+            Provide a score from 0-100 reflecting overall meeting progress effectiveness.
             """,
             evaluation_params=[
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator,
-            threshold=0.6,
+            model=self.primary_evaluator,
+            threshold=0.65,
             strict_mode=False
         )
         
@@ -300,7 +664,8 @@ class Qwen3MeetingEvaluationManager:
                 "word_count": len(content.split()),
                 "project_context": self.project_name
             }
-            
+
+
             # Create test case
             test_case = LLMTestCase(
                 input=f"""
@@ -314,31 +679,60 @@ class Qwen3MeetingEvaluationManager:
                 additional_metadata=metadata
             )
             
-            # Run all evaluations
+            # Run all evaluations with retry logic
             results = {}
             evaluation_start = time.time()
             
             for metric in self.all_metrics:
-                try:
-                    metric_start = time.time()
-                    metric.measure(test_case)
-                    metric_duration = time.time() - metric_start
-                    
-                    results[metric.name] = {
-                        "score": metric.score,
-                        "reason": metric.reason,
-                        "evaluation_time": metric_duration
-                    }
-                    
-                    print(f"✅ {metric.name}: {metric.score:.2f} ({metric_duration:.1f}s)")
-                    
-                except Exception as e:
-                    print(f"❌ {metric.name} failed: {e}")
-                    results[metric.name] = {
-                        "score": 0,
-                        "reason": f"Evaluation error: {str(e)}",
-                        "evaluation_time": 0
-                    }
+                metric_success = False
+                for attempt in range(2):  # Try twice
+                    try:
+                        metric_start = time.time()
+                        
+                        # Use fallback evaluator on second attempt if available
+                        if attempt == 1 and self.fallback_evaluator:
+                            print(f"🔄 Retrying {metric.name} with fallback evaluator...")
+                            original_model = metric.model
+                            metric.model = self.fallback_evaluator
+                        
+                        metric.measure(test_case)
+                        metric_duration = time.time() - metric_start
+                        
+                        results[metric.name] = {
+                            "score": metric.score,
+                            "reason": metric.reason,
+                            "evaluation_time": metric_duration,
+                            "evaluator_used": type(metric.model).__name__,
+                            "attempt": attempt + 1
+                        }
+                        
+                        print(f"✅ {metric.name}: {metric.score:.2f} ({metric_duration:.1f}s)")
+                        metric_success = True
+                        
+                        # Restore original model if we used fallback
+                        if attempt == 1 and self.fallback_evaluator:
+                            metric.model = original_model
+                        
+                        break
+                        
+                    except Exception as e:
+                        print(f"❌ {metric.name} attempt {attempt + 1} failed: {e}")
+                        
+                        # Restore original model if we used fallback
+                        if attempt == 1 and self.fallback_evaluator:
+                            metric.model = original_model
+                        
+                        if attempt == 1:  # Last attempt failed
+                            results[metric.name] = {
+                                "score": 0,
+                                "reason": f"Evaluation error after {attempt + 1} attempts: {str(e)}",
+                                "evaluation_time": 0,
+                                "evaluator_used": "failed",
+                                "attempt": attempt + 1
+                            }
+                
+                if not metric_success:
+                    print(f"⚠️ {metric.name} failed completely, using fallback score")
             
             evaluation_duration = time.time() - evaluation_start
             
@@ -492,19 +886,27 @@ class Qwen3MeetingEvaluationManager:
             )
             evaluation_futures.append(future)
         
-        # Wait for all evaluations to complete
+        # Wait for all evaluations to complete with progress tracking
         print(f"⏳ Processing {len(evaluation_futures)} evaluations...")
         completed_evaluations = 0
+        failed_evaluations = 0
         
-        for future in evaluation_futures:
+        for i, future in enumerate(evaluation_futures, 1):
             try:
-                result = future.result(timeout=3000) 
+                result = future.result(timeout=300)  # 5 minute timeout per evaluation
                 if result and "error" not in result:
                     completed_evaluations += 1
+                    print(f"📊 Progress: {completed_evaluations}/{len(evaluation_futures)} completed")
+                else:
+                    failed_evaluations += 1
+                    print(f"⚠️ Evaluation {i} failed")
             except Exception as e:
-                print(f"⚠️ Evaluation error: {e}")
+                failed_evaluations += 1
+                print(f"⚠️ Evaluation {i} error: {e}")
         
         print(f"✅ Completed {completed_evaluations}/{len(evaluation_futures)} evaluations")
+        if failed_evaluations > 0:
+            print(f"⚠️ {failed_evaluations} evaluations failed")
         
         # Perform holistic meeting evaluation
         holistic_results = self._evaluate_meeting_holistically(transcript_data)
@@ -610,7 +1012,9 @@ class Qwen3MeetingEvaluationManager:
                 LLMTestCaseParams.INPUT,
                 LLMTestCaseParams.ACTUAL_OUTPUT
             ],
-            model=self.qwen3_evaluator
+            model=self.primary_evaluator,
+            threshold=0.6,
+            strict_mode=False
         )
         
         # Prepare full meeting context
@@ -655,7 +1059,8 @@ class Qwen3MeetingEvaluationManager:
             for agent_name in self.agent_performance_tracker.keys():
                 agent_reports[agent_name] = self.get_agent_detailed_report(agent_name)
 
-            
+            # Generate round-by-round metrics progression
+            round_by_round_analysis = self._analyze_metrics_by_round()
             
             # Calculate basic insights directly from evaluation results
             basic_insights = self._calculate_basic_insights()
@@ -690,6 +1095,8 @@ class Qwen3MeetingEvaluationManager:
                     "improvement_areas": overall_quality["weaknesses"],
                     "meeting_effectiveness_score": self._calculate_meeting_effectiveness()
                 },
+                
+                "round_by_round_progression": round_by_round_analysis,
                 
                 "detailed_metrics": {
                     "collaboration_quality": self._get_metric_summary("Agent Collaboration Quality"),
@@ -1187,6 +1594,224 @@ class Qwen3MeetingEvaluationManager:
             return "declining"
         else:
             return "stable"
+    
+    def _analyze_metrics_by_round(self) -> Dict[str, Any]:
+        """Analyze how each metric progresses across rounds"""
+        if not self.evaluation_results:
+            return {"status": "No evaluation results available"}
+        
+        # Organize results by round
+        rounds_data = {}
+        
+        for result in self.evaluation_results:
+            round_num = result["round"]
+            
+            if round_num not in rounds_data:
+                rounds_data[round_num] = {
+                    "round_number": round_num,
+                    "meeting_stage": self._determine_meeting_stage(round_num),
+                    "agents_participated": [],
+                    "metrics": {
+                        "Agent Collaboration Quality": [],
+                        "Agent Role Adherence": [],
+                        "Agent Response Quality": [],
+                        "Meeting Progress Assessment": []
+                    },
+                    "composite_scores": [],
+                    "response_count": 0
+                }
+            
+            # Add agent to participants list
+            if result["agent"] not in rounds_data[round_num]["agents_participated"]:
+                rounds_data[round_num]["agents_participated"].append(result["agent"])
+            
+            # Collect metric scores
+            for metric_name, metric_result in result.get("results", {}).items():
+                if metric_name in rounds_data[round_num]["metrics"]:
+                    rounds_data[round_num]["metrics"][metric_name].append(metric_result["score"])
+            
+            # Collect composite score
+            rounds_data[round_num]["composite_scores"].append(result["composite_score"])
+            rounds_data[round_num]["response_count"] += 1
+        
+        # Calculate averages and trends for each round
+        round_analysis = {}
+        
+        for round_num in sorted(rounds_data.keys()):
+            round_data = rounds_data[round_num]
+            
+            # Calculate average for each metric
+            metric_averages = {}
+            for metric_name, scores in round_data["metrics"].items():
+                if scores:
+                    metric_averages[metric_name] = {
+                        "average": sum(scores) / len(scores),
+                        "max": max(scores),
+                        "min": min(scores),
+                        "count": len(scores)
+                    }
+            
+            # Calculate overall round statistics
+            composite_avg = sum(round_data["composite_scores"]) / len(round_data["composite_scores"]) if round_data["composite_scores"] else 0
+            
+            round_analysis[f"Round_{round_num}"] = {
+                "round_number": round_num,
+                "meeting_stage": round_data["meeting_stage"],
+                "participants": round_data["agents_participated"],
+                "total_responses": round_data["response_count"],
+                "overall_quality": {
+                    "average_composite_score": composite_avg,
+                    "rating": self._get_quality_rating(composite_avg)
+                },
+                "metric_breakdown": metric_averages,
+                "key_observations": self._generate_round_observations(round_num, metric_averages, composite_avg)
+            }
+        
+        # Add progression analysis
+        progression_summary = self._analyze_metric_progression(rounds_data)
+        
+        return {
+            "rounds": round_analysis,
+            "progression_summary": progression_summary,
+            "total_rounds": len(rounds_data)
+        }
+
+    def _get_quality_rating(self, score: float) -> str:
+        """Convert numeric score to quality rating"""
+        if score >= 0.85:
+            return "excellent"
+        elif score >= 0.70:
+            return "good"
+        elif score >= 0.55:
+            return "satisfactory"
+        elif score >= 0.40:
+            return "needs_improvement"
+        else:
+            return "poor"
+
+    def _generate_round_observations(self, round_num: int, metrics: Dict, composite: float) -> List[str]:
+        """Generate observations for a specific round"""
+        observations = []
+        
+        # Check role adherence
+        if "Agent Role Adherence" in metrics:
+            role_score = metrics["Agent Role Adherence"]["average"]
+            if role_score >= 0.8:
+                observations.append(f"Strong role adherence maintained (Score: {role_score:.2f})")
+            elif role_score < 0.6:
+                observations.append(f"⚠️ Role adherence needs improvement (Score: {role_score:.2f})")
+        
+        # Check collaboration
+        if "Agent Collaboration Quality" in metrics:
+            collab_score = metrics["Agent Collaboration Quality"]["average"]
+            if collab_score >= 0.8:
+                observations.append(f"Excellent collaborative dynamics (Score: {collab_score:.2f})")
+            elif collab_score < 0.6:
+                observations.append(f"⚠️ Limited collaboration observed (Score: {collab_score:.2f})")
+        
+        # Check response quality
+        if "Agent Response Quality" in metrics:
+            quality_score = metrics["Agent Response Quality"]["average"]
+            if quality_score >= 0.8:
+                observations.append(f"High-quality responses delivered (Score: {quality_score:.2f})")
+            elif quality_score < 0.6:
+                observations.append(f"⚠️ Response quality could be enhanced (Score: {quality_score:.2f})")
+        
+        # Check meeting progress
+        if "Meeting Progress Assessment" in metrics:
+            progress_score = metrics["Meeting Progress Assessment"]["average"]
+            if progress_score >= 0.8:
+                observations.append(f"Strong progress toward objectives (Score: {progress_score:.2f})")
+            elif progress_score < 0.6:
+                observations.append(f"⚠️ Limited progress in this round (Score: {progress_score:.2f})")
+        
+        return observations
+
+    def _analyze_metric_progression(self, rounds_data: Dict) -> Dict[str, Any]:
+        """Analyze how metrics progress across all rounds"""
+        sorted_rounds = sorted(rounds_data.keys())
+        
+        if len(sorted_rounds) < 2:
+            return {"status": "Insufficient rounds for progression analysis"}
+        
+        # Track each metric's progression
+        metric_trends = {
+            "Agent Collaboration Quality": [],
+            "Agent Role Adherence": [],
+            "Agent Response Quality": [],
+            "Meeting Progress Assessment": []
+        }
+        
+        composite_progression = []
+        
+        for round_num in sorted_rounds:
+            round_data = rounds_data[round_num]
+            
+            # Collect average for each metric per round
+            for metric_name in metric_trends.keys():
+                scores = round_data["metrics"].get(metric_name, [])
+                if scores:
+                    avg_score = sum(scores) / len(scores)
+                    metric_trends[metric_name].append(avg_score)
+            
+            # Composite score progression
+            if round_data["composite_scores"]:
+                composite_progression.append(sum(round_data["composite_scores"]) / len(round_data["composite_scores"]))
+        
+        # Analyze trends
+        progression_analysis = {}
+        
+        for metric_name, scores in metric_trends.items():
+            if len(scores) >= 2:
+                trend = self._calculate_trend(scores)
+                progression_analysis[metric_name] = {
+                    "scores_by_round": scores,
+                    "trend": trend,
+                    "starting_score": scores[0],
+                    "ending_score": scores[-1],
+                    "improvement": scores[-1] - scores[0],
+                    "average_across_rounds": sum(scores) / len(scores)
+                }
+        
+        # Overall meeting progression
+        if len(composite_progression) >= 2:
+            overall_trend = self._calculate_trend(composite_progression)
+            progression_analysis["overall_meeting_quality"] = {
+                "scores_by_round": composite_progression,
+                "trend": overall_trend,
+                "starting_score": composite_progression[0],
+                "ending_score": composite_progression[-1],
+                "improvement": composite_progression[-1] - composite_progression[0]
+            }
+        
+        return progression_analysis
+
+    def _calculate_trend(self, scores: List[float]) -> str:
+        """Calculate trend direction from a series of scores"""
+        if len(scores) < 2:
+            return "stable"
+        
+        # Simple linear trend calculation
+        first_half_avg = sum(scores[:len(scores)//2]) / (len(scores)//2)
+        second_half_avg = sum(scores[len(scores)//2:]) / (len(scores) - len(scores)//2)
+        
+        diff = second_half_avg - first_half_avg
+        
+        if diff > 0.1:
+            return "improving"
+        elif diff < -0.1:
+            return "declining"
+        else:
+            return "stable"
+
+    def _calculate_agent_trend_detailed(self, agent_name: str) -> str:
+        """Calculate performance trend for a specific agent"""
+        scores = self.agent_performance_tracker[agent_name]["scores_by_round"]
+        if len(scores) < 2:
+            return "insufficient_data"
+        
+        score_values = [scores[r] for r in sorted(scores.keys())]
+        return self._calculate_trend(score_values)
 
     def shutdown(self):
         """Cleanup resources and generate final report"""
@@ -1217,8 +1842,13 @@ def evaluate_meeting_transcript(transcript_file_path: str = None, transcript_dat
     
     if transcript_file_path:
         import json
-        with open(transcript_file_path, 'r') as f:
-            transcript_data = json.load(f)
+        try:
+            with open(transcript_file_path, 'r', encoding='utf-8') as f:
+                transcript_data = json.load(f)
+        except FileNotFoundError:
+            raise ValueError(f"Transcript file not found: {transcript_file_path}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in transcript file: {e}")
     
     if not transcript_data:
         raise ValueError("Either transcript_file_path or transcript_data must be provided")
@@ -1228,6 +1858,25 @@ def evaluate_meeting_transcript(transcript_file_path: str = None, transcript_dat
     for field in required_fields:
         if field not in transcript_data:
             raise ValueError(f"Missing required field: {field}")
+    
+    # Validate transcript content
+    if not transcript_data["transcript"]:
+        raise ValueError("Transcript is empty")
+    
+    if len(transcript_data["experts"]) == 0:
+        raise ValueError("No experts defined")
+    
+    # Validate API keys
+    api_keys_available = []
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        api_keys_available.append("Gemini")
+    if os.getenv("GROQ_API_KEY"):
+        api_keys_available.append("Groq")
+    
+    if not api_keys_available:
+        raise ValueError("No API keys found. Please set GEMINI_API_KEY, GOOGLE_API_KEY, or GROQ_API_KEY")
+    
+    print(f"🔑 Available evaluators: {', '.join(api_keys_available)}")
     
     # Initialize evaluation manager
     eval_manager = Qwen3MeetingEvaluationManager(
@@ -1288,6 +1937,7 @@ def example_transcript_evaluation():
             print(f"  {agent_name}: {report['overall_average']:.2f}/1.0 ({report['total_responses']} responses)")
     
     return evaluation_report
+
 
 if __name__ == "__main__":
     # Run example evaluation

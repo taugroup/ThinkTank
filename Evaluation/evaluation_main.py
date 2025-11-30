@@ -1,12 +1,12 @@
 import json
-from evaluation import Qwen3MeetingEvaluationManager
+from evaluation import GeminiProMeetingEvaluationManager
 from pathlib import Path
 
 DB = Path('/Users/praneetsurabhi/Desktop/projects/Tao/ThinkTank/projects_db.json')
 
 def call_manager(transcript, experts, project_name, meeting_topic, summary):
     # Initialize evaluation manager
-    eval_manager = Qwen3MeetingEvaluationManager(
+    eval_manager = GeminiProMeetingEvaluationManager(
         meeting_topic=meeting_topic,
         experts=experts,
         project_name=project_name

@@ -8,7 +8,7 @@ from typing import Dict, List
 
 from agno.agent import Agent
 from agno.models.ollama import Ollama
-from agno.memory.v2.memory import Memory
+from agno.memory import Memory
 from agno.storage.sqlite import SqliteStorage
 from agno.memory.v2.db.sqlite import SqliteMemoryDb
 from agno.memory.v2 import UserMemory
@@ -36,10 +36,7 @@ class ThinkTank:
         db = Path(db_path)
         db.parent.mkdir(parents=True, exist_ok=True)
         self._storage = SqliteStorage(table_name="sessions", db_file=str(db))
-        self._memory = Memory(
-            model=Ollama(id="llama3.1", options={"temperature": 0.0}),
-            db=SqliteMemoryDb(table_name="memories", db_file=str(db)),
-        )
+        self._memory_db = SqliteMemoryDb(table_name="memories", db_file=str(db))
 
         # ── Core agents ─────────────────────────────────────────────────────
         self.pi = build_local_agent(
@@ -47,7 +44,7 @@ class ThinkTank:
             description="Leads the project, resolves conflicts, synthesises insights.",
             role="Provide final recommendations and meeting summaries.",
             temperature=0.2,
-            memory=self._memory,
+            memory=None,
             storage=self._storage,
             enable_agentic_memory=True,
         )
@@ -57,7 +54,7 @@ class ThinkTank:
             description="Spot logical flaws and methodological weaknesses.",
             role="Offer rigorous but constructive criticism.",
             temperature=0.3,
-            memory=self._memory,
+            memory=None,
             storage=self._storage,
         )
 
@@ -110,7 +107,7 @@ class ThinkTank:
                 name=d["title"],
                 description=f"Expertise: {d['expertise']}. Goal: {d['goal']}",
                 role=d["role"],
-                memory=self._memory,
+                memory=None,
                 storage=self._storage,
             )
             self.scientists.append(agent)
@@ -119,9 +116,18 @@ class ThinkTank:
     # Transcript helpers
     # ------------------------------------------------------------------
     def _log(self, role: str, author: str, content: str) -> None:
-        self._messages.append(Message(role=role, author=author, content=content))
+        msg = Message(role=role, author=author, content=content)
+        self._messages.append(msg)
         with open("meeting_transcript.txt", "a", encoding="utf-8") as f:
             f.write(f"\n----- {author} -----\n{content}\n")
+        with open("meeting_responses.jsonl", "a", encoding="utf-8") as jf:
+            json.dump({
+                "timestamp": msg.timestamp,
+                "role": role,
+                "author": author,
+                "content": content
+            }, jf)
+            jf.write("\n")
 
     def _context(self) -> str:
         return "\n".join(f"[{m.timestamp}] {m.author}: {m.content}" for m in self._messages)
@@ -170,7 +176,8 @@ class ThinkTank:
         self._log("pi", self.pi.name, summary)
         print("\n=== Meeting Complete ===\n")
 
-        self._memory.add_user_memory(UserMemory(memory = summary), user_id="think_tank")
+        # Memory is now handled automatically by the agent's storage
+        # self._memory.add_user_memory(UserMemory(memory = summary), user_id="think_tank")
         return summary
 
     # ------------------------------------------------------------------
@@ -206,7 +213,8 @@ class ThinkTank:
             self._log("scientist", agent.name, answer)
             print(indent(answer))
 
-        self._memory.add_user_memory(UserMemory(memory = answer),"think_tank")
+        # Memory is now handled automatically by the agent's storage
+        # self._memory.add_user_memory(UserMemory(memory = answer),"think_tank")
         print("=== Individual Meeting Complete ===")
         return answer
 
@@ -250,7 +258,8 @@ class ThinkTank:
         )
         merged = self.pi.run(merge_prompt, stream=False).content
         self._log("pi", self.pi.name, merged)
-        self._memory.add_user_memory(UserMemory(memory = merged),"think_tank")
+        # Memory is now handled automatically by the agent's storage
+        # self._memory.add_user_memory(UserMemory(memory = merged),"think_tank")
         return merged
 
 
