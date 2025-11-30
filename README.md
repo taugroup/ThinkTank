@@ -79,5 +79,5 @@ streamlit run app.py
 ```
 
 ## Team
-- Devs: {Praneet Sai Madhu Surabhi, Dheeraj Mudireddy}, MS. Data Science '25, TAU Group
+- (In no particular order) Praneet Sai Madhu Surabhi, Dheeraj Mudireddy, Sujith Julakanti {MS. Data Science '25, TAU Group}
 - Advisor: Prof. Dr. Jian Tao, Asst. Dir. of TAMIDS, Dir. of Digital Twin Lab
