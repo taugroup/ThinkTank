@@ -1,0 +1,38 @@
+[
+  {
+    "id": "boston_congestion_pricing",
+    "domain": "transportation",
+    "expected_forecast_mode": "numeric",
+    "request": {
+      "question": "Should Boston implement congestion pricing downtown?",
+      "geography": "Boston, MA",
+      "objective": "Reduce downtown congestion while protecting equity",
+      "constraints": ["Protect low-income commuters", "Revenue must cover operating costs"],
+      "timeline": "3 years"
+    }
+  },
+  {
+    "id": "austin_housing_zoning",
+    "domain": "housing",
+    "expected_forecast_mode": "qualitative",
+    "request": {
+      "question": "Should Austin relax single-family zoning to allow more multi-family housing?",
+      "geography": "Austin, TX",
+      "objective": "Increase housing supply and affordability",
+      "constraints": ["Preserve neighborhood character concerns", "Avoid displacement"],
+      "timeline": "5 years"
+    }
+  },
+  {
+    "id": "ohio_universal_prek",
+    "domain": "education",
+    "expected_forecast_mode": "qualitative",
+    "request": {
+      "question": "Should Ohio fund universal pre-kindergarten statewide?",
+      "geography": "Ohio",
+      "objective": "Improve early childhood education outcomes",
+      "constraints": ["Stay within the state budget", "Ensure rural access"],
+      "timeline": "4 years"
+    }
+  }
+]

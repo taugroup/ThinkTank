@@ -11,3 +11,17 @@ pandoc-*
 uploaded_files/
 meeting_responses.jsonl
 .env
+
+# --- Policy Think Tank: re-include tracked JSON the blanket *.json hid ---
+!examples/*.json
+!evals/cases.json
+!evals/baseline_results.json
+!evals/skilled_results.json
+!data/**/source_manifest.json
+# The `__*` rule above also hides package __init__.py — re-include those.
+!**/__init__.py
+
+# Generated runtime artifacts (kept ignored)
+policy_runs.db
+workspace/*
+!workspace/.gitkeep

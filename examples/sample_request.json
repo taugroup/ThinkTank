@@ -1,0 +1,11 @@
+{
+  "question": "Should Boston implement congestion pricing downtown?",
+  "geography": "Boston, MA",
+  "objective": "Reduce downtown congestion while protecting equity",
+  "constraints": [
+    "Protect low-income commuters",
+    "Revenue must cover operating costs"
+  ],
+  "timeline": "3 years",
+  "uploaded_files": []
+}

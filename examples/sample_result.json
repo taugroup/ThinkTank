@@ -1,0 +1,780 @@
+{
+  "run_id": "d7dfaa908c3c",
+  "request": {
+    "question": "Should Boston implement congestion pricing downtown?",
+    "geography": "Boston, MA",
+    "objective": "Reduce downtown congestion while protecting equity",
+    "constraints": [
+      "Protect low-income commuters",
+      "Revenue must cover operating costs"
+    ],
+    "timeline": "3 years",
+    "uploaded_files": []
+  },
+  "objective": {
+    "statement": "Reduce downtown congestion while protecting equity",
+    "success_metrics": [
+      "Measurable progress toward the stated objective",
+      "Costs justified by benefits, within the stated constraints",
+      "No disproportionate burden on vulnerable or affected groups"
+    ],
+    "constraints": [
+      "Protect low-income commuters",
+      "Revenue must cover operating costs"
+    ],
+    "out_of_scope": [
+      "Issues outside the stated geography or objective"
+    ]
+  },
+  "stakeholders": [
+    {
+      "key": "government_regulatory",
+      "name": "Government & Regulatory",
+      "perspective": "Legal authority, fiscal responsibility, and regulatory feasibility.",
+      "priorities": [
+        "legal authority",
+        "budget",
+        "enforceability"
+      ],
+      "skills": [
+        "policy-research"
+      ]
+    },
+    {
+      "key": "community_equity",
+      "name": "Community & Equity",
+      "perspective": "Distributional fairness and impact on vulnerable populations.",
+      "priorities": [
+        "equity",
+        "affordability",
+        "access"
+      ],
+      "skills": [
+        "policy-research"
+      ]
+    },
+    {
+      "key": "economic_fiscal",
+      "name": "Economic & Fiscal",
+      "perspective": "Effects on the economy, employment, costs, and public finances.",
+      "priorities": [
+        "economic impact",
+        "cost",
+        "competitiveness"
+      ],
+      "skills": [
+        "policy-research",
+        "policy-analysis"
+      ]
+    },
+    {
+      "key": "subject_matter_expert",
+      "name": "Subject-Matter & Implementation Expert",
+      "perspective": "Technical evidence and operational feasibility for this issue.",
+      "priorities": [
+        "evidence base",
+        "operational feasibility",
+        "unintended effects"
+      ],
+      "skills": [
+        "policy-research"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "research_0",
+      "description": "Gather objective evidence on: benefits and effectiveness of addressing Should Boston implement congestion pricing downtown",
+      "agent_type": "research",
+      "skills": [
+        "policy-research"
+      ],
+      "stakeholder_key": "",
+      "queries": [
+        "benefits and effectiveness of addressing Should Boston implement congestion pricing downtown Boston, MA",
+        "benefits and effectiveness of addressing Should Boston implement congestion pricing downtown"
+      ],
+      "required_outputs": [
+        "cited findings"
+      ]
+    },
+    {
+      "task_id": "research_1",
+      "description": "Gather objective evidence on: risks, costs, and comparable cases from other jurisdictions",
+      "agent_type": "research",
+      "skills": [
+        "policy-research"
+      ],
+      "stakeholder_key": "",
+      "queries": [
+        "risks, costs, and comparable cases from other jurisdictions Boston, MA",
+        "risks, costs, and comparable cases from other jurisdictions"
+      ],
+      "required_outputs": [
+        "cited findings"
+      ]
+    },
+    {
+      "task_id": "task_government_regulatory",
+      "description": "Analyze Should Boston implement congestion pricing downtown? from the Government & Regulatory perspective.",
+      "agent_type": "stakeholder",
+      "skills": [
+        "policy-research"
+      ],
+      "stakeholder_key": "government_regulatory",
+      "queries": [
+        "Should Boston implement congestion pricing downtown? legal authority Boston, MA",
+        "Should Boston implement congestion pricing downtown? budget Boston, MA",
+        "Should Boston implement congestion pricing downtown? enforceability Boston, MA"
+      ],
+      "required_outputs": [
+        "cited findings",
+        "likely position",
+        "concerns"
+      ]
+    },
+    {
+      "task_id": "task_community_equity",
+      "description": "Analyze Should Boston implement congestion pricing downtown? from the Community & Equity perspective.",
+      "agent_type": "stakeholder",
+      "skills": [
+        "policy-research"
+      ],
+      "stakeholder_key": "community_equity",
+      "queries": [
+        "Should Boston implement congestion pricing downtown? equity Boston, MA",
+        "Should Boston implement congestion pricing downtown? affordability Boston, MA",
+        "Should Boston implement congestion pricing downtown? access Boston, MA"
+      ],
+      "required_outputs": [
+        "cited findings",
+        "likely position",
+        "concerns"
+      ]
+    },
+    {
+      "task_id": "task_economic_fiscal",
+      "description": "Analyze Should Boston implement congestion pricing downtown? from the Economic & Fiscal perspective.",
+      "agent_type": "stakeholder",
+      "skills": [
+        "policy-research",
+        "policy-analysis"
+      ],
+      "stakeholder_key": "economic_fiscal",
+      "queries": [
+        "Should Boston implement congestion pricing downtown? economic impact Boston, MA",
+        "Should Boston implement congestion pricing downtown? cost Boston, MA",
+        "Should Boston implement congestion pricing downtown? competitiveness Boston, MA"
+      ],
+      "required_outputs": [
+        "cited findings",
+        "likely position",
+        "concerns"
+      ]
+    },
+    {
+      "task_id": "task_subject_matter_expert",
+      "description": "Analyze Should Boston implement congestion pricing downtown? from the Subject-Matter & Implementation Expert perspective.",
+      "agent_type": "stakeholder",
+      "skills": [
+        "policy-research"
+      ],
+      "stakeholder_key": "subject_matter_expert",
+      "queries": [
+        "Should Boston implement congestion pricing downtown? evidence base Boston, MA",
+        "Should Boston implement congestion pricing downtown? operational feasibility Boston, MA",
+        "Should Boston implement congestion pricing downtown? unintended effects Boston, MA"
+      ],
+      "required_outputs": [
+        "cited findings",
+        "likely position",
+        "concerns"
+      ]
+    }
+  ],
+  "research_briefs": [
+    {
+      "topic": "Gather objective evidence on: benefits and effectiveness of addressing Should Boston implement congestion pricing downtown",
+      "findings": [
+        {
+          "claim": "Evidence on 'Gather objective evidence on: benefits and effectiveness of addressing Should Boston implement congestion pricing downtown' shows mixed but informative results.",
+          "evidence_ids": [
+            "PLACEHOLDER-GOV",
+            "PLACEHOLDER-ACADEMIC"
+          ],
+          "confidence": 0.6,
+          "assumptions": [],
+          "limitations": [
+            "Placeholder evidence in mock mode."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "PLACEHOLDER-GOV",
+        "PLACEHOLDER-ACADEMIC",
+        "PLACEHOLDER-CASE"
+      ],
+      "summary": "3 sources gathered on this topic.",
+      "skills_used": [
+        "policy-research"
+      ]
+    },
+    {
+      "topic": "Gather objective evidence on: risks, costs, and comparable cases from other jurisdictions",
+      "findings": [
+        {
+          "claim": "Evidence on 'Gather objective evidence on: risks, costs, and comparable cases from other jurisdictions' shows mixed but informative results.",
+          "evidence_ids": [
+            "PLACEHOLDER-GOV",
+            "PLACEHOLDER-ACADEMIC"
+          ],
+          "confidence": 0.6,
+          "assumptions": [],
+          "limitations": [
+            "Placeholder evidence in mock mode."
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "PLACEHOLDER-GOV",
+        "PLACEHOLDER-ACADEMIC",
+        "PLACEHOLDER-CASE"
+      ],
+      "summary": "3 sources gathered on this topic.",
+      "skills_used": [
+        "policy-research"
+      ]
+    }
+  ],
+  "research": [
+    {
+      "stakeholder": "Government & Regulatory",
+      "findings": [
+        {
+          "claim": "From the Government & Regulatory view, Should Boston implement congestion pricing downtown primarily affects legal authority.",
+          "evidence_ids": [
+            "PLACEHOLDER-GOV",
+            "PLACEHOLDER-ACADEMIC"
+          ],
+          "confidence": 0.7,
+          "assumptions": [
+            "Local conditions resemble those in source PLACEHOLDER-GOV."
+          ],
+          "limitations": [
+            "Limited city-specific data in the curated corpus."
+          ]
+        }
+      ],
+      "likely_position": "Government & Regulatory is cautiously supportive if legal authority concerns are addressed.",
+      "concerns": [
+        "Potential negative impact on budget",
+        "Potential negative impact on enforceability"
+      ],
+      "proposed_mitigations": [
+        "Targeted measures to protect enforceability"
+      ],
+      "data_gaps": [
+        "Need recent Boston, MA data on legal authority"
+      ],
+      "handoff_summary": "Government & Regulatory: cautiously supportive; key concern = enforceability; 3 sources cited."
+    },
+    {
+      "stakeholder": "Community & Equity",
+      "findings": [
+        {
+          "claim": "From the Community & Equity view, Should Boston implement congestion pricing downtown primarily affects equity.",
+          "evidence_ids": [
+            "PLACEHOLDER-GOV",
+            "PLACEHOLDER-ACADEMIC"
+          ],
+          "confidence": 0.7,
+          "assumptions": [
+            "Local conditions resemble those in source PLACEHOLDER-GOV."
+          ],
+          "limitations": [
+            "Limited city-specific data in the curated corpus."
+          ]
+        }
+      ],
+      "likely_position": "Community & Equity is cautiously supportive if equity concerns are addressed.",
+      "concerns": [
+        "Potential negative impact on affordability",
+        "Potential negative impact on access"
+      ],
+      "proposed_mitigations": [
+        "Targeted measures to protect access"
+      ],
+      "data_gaps": [
+        "Need recent Boston, MA data on equity"
+      ],
+      "handoff_summary": "Community & Equity: cautiously supportive; key concern = access; 3 sources cited."
+    },
+    {
+      "stakeholder": "Economic & Fiscal",
+      "findings": [
+        {
+          "claim": "From the Economic & Fiscal view, Should Boston implement congestion pricing downtown primarily affects economic impact.",
+          "evidence_ids": [
+            "PLACEHOLDER-GOV",
+            "PLACEHOLDER-ACADEMIC"
+          ],
+          "confidence": 0.7,
+          "assumptions": [
+            "Local conditions resemble those in source PLACEHOLDER-GOV."
+          ],
+          "limitations": [
+            "Limited city-specific data in the curated corpus."
+          ]
+        }
+      ],
+      "likely_position": "Economic & Fiscal is cautiously supportive if economic impact concerns are addressed.",
+      "concerns": [
+        "Potential negative impact on cost",
+        "Potential negative impact on competitiveness"
+      ],
+      "proposed_mitigations": [
+        "Targeted measures to protect competitiveness"
+      ],
+      "data_gaps": [
+        "Need recent Boston, MA data on economic impact"
+      ],
+      "handoff_summary": "Economic & Fiscal: cautiously supportive; key concern = competitiveness; 3 sources cited."
+    },
+    {
+      "stakeholder": "Subject-Matter & Implementation Expert",
+      "findings": [
+        {
+          "claim": "From the Subject-Matter & Implementation Expert view, Should Boston implement congestion pricing downtown primarily affects evidence base.",
+          "evidence_ids": [
+            "PLACEHOLDER-GOV",
+            "PLACEHOLDER-ACADEMIC"
+          ],
+          "confidence": 0.7,
+          "assumptions": [
+            "Local conditions resemble those in source PLACEHOLDER-GOV."
+          ],
+          "limitations": [
+            "Limited city-specific data in the curated corpus."
+          ]
+        }
+      ],
+      "likely_position": "Subject-Matter & Implementation Expert is cautiously supportive if evidence base concerns are addressed.",
+      "concerns": [
+        "Potential negative impact on operational feasibility",
+        "Potential negative impact on unintended effects"
+      ],
+      "proposed_mitigations": [
+        "Targeted measures to protect unintended effects"
+      ],
+      "data_gaps": [
+        "Need recent Boston, MA data on evidence base"
+      ],
+      "handoff_summary": "Subject-Matter & Implementation Expert: cautiously supportive; key concern = unintended effects; 3 sources cited."
+    }
+  ],
+  "synthesis": {
+    "summary": "Across 4 stakeholder perspectives, there is qualified support for action on 'Should Boston implement congestion pricing downtown?', contingent on equity safeguards.",
+    "consensus_points": [
+      "Some intervention is justified by the evidence.",
+      "Mitigations are required to protect vulnerable groups."
+    ],
+    "disagreements": [
+      "Stakeholders differ on the acceptable level of cost."
+    ],
+    "key_findings": [
+      {
+        "claim": "From the Government & Regulatory view, Should Boston implement congestion pricing downtown primarily affects legal authority.",
+        "evidence_ids": [
+          "PLACEHOLDER-GOV",
+          "PLACEHOLDER-ACADEMIC"
+        ],
+        "confidence": 0.7,
+        "assumptions": [
+          "Local conditions resemble those in source PLACEHOLDER-GOV."
+        ],
+        "limitations": [
+          "Limited city-specific data in the curated corpus."
+        ]
+      },
+      {
+        "claim": "From the Community & Equity view, Should Boston implement congestion pricing downtown primarily affects equity.",
+        "evidence_ids": [
+          "PLACEHOLDER-GOV",
+          "PLACEHOLDER-ACADEMIC"
+        ],
+        "confidence": 0.7,
+        "assumptions": [
+          "Local conditions resemble those in source PLACEHOLDER-GOV."
+        ],
+        "limitations": [
+          "Limited city-specific data in the curated corpus."
+        ]
+      },
+      {
+        "claim": "From the Economic & Fiscal view, Should Boston implement congestion pricing downtown primarily affects economic impact.",
+        "evidence_ids": [
+          "PLACEHOLDER-GOV",
+          "PLACEHOLDER-ACADEMIC"
+        ],
+        "confidence": 0.7,
+        "assumptions": [
+          "Local conditions resemble those in source PLACEHOLDER-GOV."
+        ],
+        "limitations": [
+          "Limited city-specific data in the curated corpus."
+        ]
+      },
+      {
+        "claim": "From the Subject-Matter & Implementation Expert view, Should Boston implement congestion pricing downtown primarily affects evidence base.",
+        "evidence_ids": [
+          "PLACEHOLDER-GOV",
+          "PLACEHOLDER-ACADEMIC"
+        ],
+        "confidence": 0.7,
+        "assumptions": [
+          "Local conditions resemble those in source PLACEHOLDER-GOV."
+        ],
+        "limitations": [
+          "Limited city-specific data in the curated corpus."
+        ]
+      }
+    ],
+    "evidence_ids": [
+      "PLACEHOLDER-ACADEMIC",
+      "PLACEHOLDER-GOV"
+    ],
+    "data_gaps": [
+      "Need recent Boston, MA data on economic impact",
+      "Need recent Boston, MA data on equity",
+      "Need recent Boston, MA data on evidence base",
+      "Need recent Boston, MA data on legal authority"
+    ]
+  },
+  "recommendation": {
+    "summary": "Adopt a phased, equity-protected approach to 'Should Boston implement congestion pricing downtown' in Boston, MA, piloted before full rollout and monitored against clear success metrics.",
+    "recommended_actions": [
+      "Implement the core intervention addressing: Should Boston implement congestion pricing downtown",
+      "Add targeted protections for the most affected groups",
+      "Direct benefits/savings toward equity and reinvestment"
+    ],
+    "alternatives": [
+      "No action",
+      "A narrower / lower-cost variant",
+      "A phased pilot only"
+    ],
+    "benefits": [
+      "Direct progress on the stated objective",
+      "A dedicated mechanism to fund follow-through",
+      "Reduced long-term costs of inaction"
+    ],
+    "risks": [
+      "Regressive impact if protections are poorly designed",
+      "Displacement or spillover of the problem to nearby groups"
+    ],
+    "equity_effects": [
+      "Vulnerable groups could be disproportionately burdened without safeguards",
+      "Targeted reinvestment can offset burden if directed to underserved groups"
+    ],
+    "evidence_ids": [
+      "PLACEHOLDER-ACADEMIC",
+      "PLACEHOLDER-GOV"
+    ],
+    "confidence": 0.7,
+    "impact": {
+      "economic": "Net positive if benefits are realized; transition costs for some groups.",
+      "equity": "Risk of regressivity, mitigable via safeguards and targeted reinvestment.",
+      "political": "Contested; visible safeguards and reinvestment build support.",
+      "operational": "Feasible with established delivery mechanisms.",
+      "legal": "Requires confirmation of authorizing authority.",
+      "notes": []
+    },
+    "implementation_plan": {
+      "steps": [
+        {
+          "phase": "Phase 1: Design & Authorization",
+          "actions": [
+            "Confirm legal authority and finalize the policy design",
+            "Define eligibility, scope, and protective carve-outs"
+          ],
+          "timeline": "Months 0-6",
+          "owner": "Lead agency"
+        },
+        {
+          "phase": "Phase 2: Pilot & Build",
+          "actions": [
+            "Stand up the operational and data infrastructure",
+            "Run a limited pilot with monitoring and feedback"
+          ],
+          "timeline": "Months 6-18",
+          "owner": "Lead agency + delivery partners"
+        },
+        {
+          "phase": "Phase 3: Rollout & Reinvestment",
+          "actions": [
+            "Scale based on pilot results",
+            "Direct gains toward affected and underserved groups"
+          ],
+          "timeline": "Months 18-36",
+          "owner": "Oversight body"
+        }
+      ],
+      "success_metrics": [
+        "Measurable progress toward the stated objective vs. baseline",
+        "Costs remain within the stated constraints",
+        "No net harm to the most affected groups"
+      ],
+      "monitoring": [
+        "Quarterly outcome reporting against the success metrics",
+        "Annual equity-impact audit"
+      ]
+    },
+    "alternatives_detail": [
+      {
+        "name": "No action",
+        "description": "Maintain the status quo.",
+        "pros": [
+          "No implementation cost",
+          "No political friction"
+        ],
+        "cons": [
+          "The underlying problem persists",
+          "No new capacity to act"
+        ]
+      },
+      {
+        "name": "Narrower variant",
+        "description": "A smaller-scope, lower-cost version of the intervention.",
+        "pros": [
+          "Lower cost and risk",
+          "Faster to deliver"
+        ],
+        "cons": [
+          "Weaker effect on the objective",
+          "May not reach key groups"
+        ]
+      }
+    ]
+  },
+  "critiques": [
+    {
+      "issues": [
+        "Key projections rest on assumptions not yet validated for Boston, MA.",
+        "Second-order and displacement effects are acknowledged but not quantified."
+      ],
+      "unsupported_claims": [
+        "Stated confidence level lacks an accompanying sensitivity analysis."
+      ],
+      "unintended_consequences": [
+        "Effects may spill over to adjacent populations or jurisdictions.",
+        "Affected groups may adapt in ways that erode the intended benefit."
+      ],
+      "missing_perspectives": [
+        "Frontline implementers / operators",
+        "Groups most exposed to the downside risks"
+      ],
+      "required_revisions": [
+        "Define monitoring triggers for the identified second-order effects"
+      ],
+      "severity": "medium"
+    }
+  ],
+  "revisions": 0,
+  "forecast": {
+    "mode": "numeric",
+    "domain": "transportation",
+    "baseline": {
+      "name": "baseline",
+      "trip_reduction": 0.0,
+      "gross_revenue": 0.0,
+      "net_revenue": 0.0,
+      "transit_demand_increase": 0.0,
+      "emissions_change": -0.0,
+      "commuter_burden": 0.0,
+      "equity_risk_index": 0.34,
+      "inputs": {
+        "effective_response_rate": 0.0,
+        "effective_enforcement": 0.0,
+        "chargeable_trips_per_day": 102000.0
+      }
+    },
+    "conservative": {
+      "name": "conservative",
+      "trip_reduction": 2457945.0,
+      "gross_revenue": 207378495.0,
+      "net_revenue": 162378495.0,
+      "transit_demand_increase": 1474767.0,
+      "emissions_change": -11306547.0,
+      "commuter_burden": 829513.98,
+      "equity_risk_index": 0.34,
+      "inputs": {
+        "effective_response_rate": 0.126,
+        "effective_enforcement": 0.765,
+        "chargeable_trips_per_day": 102000.0
+      }
+    },
+    "expected": {
+      "name": "expected",
+      "trip_reduction": 4131000.0,
+      "gross_revenue": 192321000.0,
+      "net_revenue": 147321000.0,
+      "transit_demand_increase": 2478600.0,
+      "emissions_change": -19002600.0,
+      "commuter_burden": 769284.0,
+      "equity_risk_index": 0.34,
+      "inputs": {
+        "effective_response_rate": 0.18,
+        "effective_enforcement": 0.9,
+        "chargeable_trips_per_day": 102000.0
+      }
+    },
+    "optimistic": {
+      "name": "optimistic",
+      "trip_reduction": 5370300.0,
+      "gross_revenue": 181167300.0,
+      "net_revenue": 136167300.0,
+      "transit_demand_increase": 3222180.0,
+      "emissions_change": -24703380.0,
+      "commuter_burden": 724669.2,
+      "equity_risk_index": 0.34,
+      "inputs": {
+        "effective_response_rate": 0.234,
+        "effective_enforcement": 0.9,
+        "chargeable_trips_per_day": 102000.0
+      }
+    },
+    "qualitative": [],
+    "assumptions": [
+      "Average CO2 avoided per deterred trip = 4.6 kg.",
+      "Mode shift to transit = 60% of deterred trips.",
+      "Baseline scenario assumes the status quo (no pricing in effect).",
+      "Conservative assumes 70% of the modeled behavioral response and 85% enforcement.",
+      "Optimistic assumes 130% of the modeled behavioral response.",
+      "Exempt trips never pay and are never deterred."
+    ],
+    "limitations": [
+      "Figures are scenario estimates, not predictions of actual outcomes.",
+      "Behavioral response and mode-shift constants are illustrative, not city-calibrated.",
+      "Induced demand, boundary effects, and economic feedback are not modeled."
+    ],
+    "sensitivity": {
+      "net_revenue_per_10pct_fee_increase": 19232100.0
+    }
+  },
+  "forecast_parameters": {
+    "daily_fee": 9.0,
+    "affected_trips_per_day": 120000,
+    "behavioral_response_rate": 0.18,
+    "exemption_rate": 0.15,
+    "enforcement_effectiveness": 0.9,
+    "operating_days_per_year": 250,
+    "implementation_cost": 45000000.0,
+    "transit_reinvestment_pct": 0.6,
+    "extra": {}
+  },
+  "evidence": [
+    {
+      "source_id": "PLACEHOLDER-GOV",
+      "title": "Government Review Relevant to: Should Boston implement congestion pricing downtown?",
+      "organization": "(placeholder) Government Source",
+      "source_type": "government_report",
+      "publication_date": "2023",
+      "geography": "Boston, MA",
+      "page": 1,
+      "text": "Placeholder government evidence relevant to Should Boston implement congestion pricing downtown? in Boston, MA.",
+      "relevance_score": 0.9,
+      "credibility_score": 0.85
+    },
+    {
+      "source_id": "PLACEHOLDER-ACADEMIC",
+      "title": "Comparative Study Relevant to: Should Boston implement congestion pricing downtown?",
+      "organization": "(placeholder) Academic Source",
+      "source_type": "academic",
+      "publication_date": "2022",
+      "geography": "Comparable jurisdictions",
+      "page": 4,
+      "text": "Placeholder academic evidence on outcomes of similar policies to Should Boston implement congestion pricing downtown?.",
+      "relevance_score": 0.86,
+      "credibility_score": 0.82
+    },
+    {
+      "source_id": "PLACEHOLDER-CASE",
+      "title": "Case Study Relevant to: Should Boston implement congestion pricing downtown?",
+      "organization": "(placeholder) Case Study Source",
+      "source_type": "case_study",
+      "publication_date": "2021",
+      "geography": "Comparable jurisdiction",
+      "page": 2,
+      "text": "Placeholder case-study evidence on implementing a policy like Should Boston implement congestion pricing downtown?.",
+      "relevance_score": 0.8,
+      "credibility_score": 0.75
+    }
+  ],
+  "model_events": [
+    {
+      "agent": "policy_director",
+      "model": "mock",
+      "latency_ms": 1,
+      "schema_valid": true,
+      "escalated": false,
+      "error": null
+    },
+    {
+      "agent": "research",
+      "model": "mock",
+      "latency_ms": 1,
+      "schema_valid": true,
+      "escalated": false,
+      "error": null
+    },
+    {
+      "agent": "stakeholder_research",
+      "model": "mock",
+      "latency_ms": 1,
+      "schema_valid": true,
+      "escalated": false,
+      "error": null
+    },
+    {
+      "agent": "synthesis",
+      "model": "mock",
+      "latency_ms": 1,
+      "schema_valid": true,
+      "escalated": false,
+      "error": null
+    },
+    {
+      "agent": "implementation_agent",
+      "model": "mock",
+      "latency_ms": 1,
+      "schema_valid": true,
+      "escalated": false,
+      "error": null
+    },
+    {
+      "agent": "red_team",
+      "model": "mock",
+      "latency_ms": 1,
+      "schema_valid": true,
+      "escalated": false,
+      "error": null
+    },
+    {
+      "agent": "forecasting",
+      "model": "mock",
+      "latency_ms": 1,
+      "schema_valid": true,
+      "escalated": false,
+      "error": null
+    }
+  ],
+  "events": [
+    "Policy Director created research plan with 6 tasks.",
+    "2 research agent(s) gathered evidence (2 tasks).",
+    "4 stakeholder agents completed research.",
+    "Research synthesized across stakeholders.",
+    "Implementation plan and recommendation drafted.",
+    "Red Team review complete (severity=medium).",
+    "Numeric forecast generated (transportation domain).",
+    "Final recommendation assembled."
+  ]
+}

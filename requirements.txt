@@ -1,20 +1,32 @@
-sqlalchemy
-ollama
+# --- Core orchestration (P1) ---
+langgraph
+langchain-core
+pydantic>=2
+
+# --- Agents / local models ---
 agno==1.8.3
-tiktoken
-python-docx
-reportlab
-markdown2
+ollama
+
+# --- RAG / ingestion (P2) ---
 chromadb
 langchain-ollama
 langchain_community
 langchain-text-splitters
 pypdf
-streamlit
-pypandoc
 pandas
-tabulate
+
+# --- UI / export (P4) ---
+streamlit
+python-docx
 pypandoc
-fastapi
-uvicorn
-deepeval>=1.4.9
+tabulate
+markdown2
+
+# --- Tooling / tests ---
+pytest
+tiktoken
+sqlalchemy
+
+# NOTE: FastAPI/uvicorn and deepeval were used by the retired meeting WebSocket
+# path and cloud evaluators; they are intentionally dropped from the local-first
+# policy stack. Re-add only if you revive those components.

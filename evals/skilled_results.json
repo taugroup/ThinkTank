@@ -1,0 +1,68 @@
+{
+  "summary": {
+    "cases": 3,
+    "assertion_pass_rate": 1.0,
+    "passed_assertions": 27,
+    "total_assertions": 27,
+    "local_model_calls": 21,
+    "escalations": 0,
+    "schema_failures": 0,
+    "errors": 0
+  },
+  "cases": [
+    {
+      "id": "boston_congestion_pricing",
+      "latency_ms": 254,
+      "assertions": {
+        "findings_have_evidence_ids": true,
+        "recommendation_has_2plus_sources": true,
+        "multiple_stakeholder_perspectives": true,
+        "equity_discussed": true,
+        "implementation_has_3plus_steps": true,
+        "red_team_two_plus_weaknesses": true,
+        "forecast_present_in_correct_mode": true,
+        "forecast_assumptions_visible": true,
+        "revisions_bounded": true
+      },
+      "passed": 9,
+      "total": 9,
+      "error": null
+    },
+    {
+      "id": "austin_housing_zoning",
+      "latency_ms": 7,
+      "assertions": {
+        "findings_have_evidence_ids": true,
+        "recommendation_has_2plus_sources": true,
+        "multiple_stakeholder_perspectives": true,
+        "equity_discussed": true,
+        "implementation_has_3plus_steps": true,
+        "red_team_two_plus_weaknesses": true,
+        "forecast_present_in_correct_mode": true,
+        "forecast_assumptions_visible": true,
+        "revisions_bounded": true
+      },
+      "passed": 9,
+      "total": 9,
+      "error": null
+    },
+    {
+      "id": "ohio_universal_prek",
+      "latency_ms": 7,
+      "assertions": {
+        "findings_have_evidence_ids": true,
+        "recommendation_has_2plus_sources": true,
+        "multiple_stakeholder_perspectives": true,
+        "equity_discussed": true,
+        "implementation_has_3plus_steps": true,
+        "red_team_two_plus_weaknesses": true,
+        "forecast_present_in_correct_mode": true,
+        "forecast_assumptions_visible": true,
+        "revisions_bounded": true
+      },
+      "passed": 9,
+      "total": 9,
+      "error": null
+    }
+  ]
+}

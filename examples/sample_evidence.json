@@ -1,0 +1,50 @@
+[
+  {
+    "source_id": "TFL-2008-CC",
+    "title": "Central London Congestion Charging: Impacts Monitoring Sixth Annual Report",
+    "organization": "Transport for London",
+    "source_type": "government_report",
+    "publication_date": "2008",
+    "geography": "London, UK",
+    "page": 23,
+    "text": "Congestion charging reduced traffic entering the charging zone by approximately 21% relative to pre-charge levels, with revenue reinvested into bus services.",
+    "relevance_score": 0.92,
+    "credibility_score": 0.9
+  },
+  {
+    "source_id": "TRB-2021-CP",
+    "title": "Congestion Pricing in Practice: A Comparative Review",
+    "organization": "Transportation Research Board",
+    "source_type": "academic",
+    "publication_date": "2021",
+    "geography": "Global",
+    "page": 12,
+    "text": "Across cordon pricing schemes, peak vehicle entries fell 15-20%, while distributional effects depended heavily on exemption design and transit reinvestment.",
+    "relevance_score": 0.9,
+    "credibility_score": 0.86
+  },
+  {
+    "source_id": "MBTA-2023-RIDERSHIP",
+    "title": "MBTA Ridership and Service Open Data Export",
+    "organization": "Massachusetts Bay Transportation Authority",
+    "source_type": "open_data",
+    "publication_date": "2023",
+    "geography": "Boston, MA",
+    "page": null,
+    "text": "Downtown Boston transit corridors retain spare peak capacity on several rapid-transit lines, indicating room to absorb mode shift from any pricing program.",
+    "relevance_score": 0.84,
+    "credibility_score": 0.82
+  },
+  {
+    "source_id": "NYC-2019-EQUITY",
+    "title": "Central Business District Tolling: Equity Considerations",
+    "organization": "NYC Metropolitan Transportation Authority",
+    "source_type": "case_study",
+    "publication_date": "2019",
+    "geography": "New York, NY",
+    "page": 8,
+    "text": "Low-income drivers without transit alternatives bear a higher relative burden; targeted exemptions and credits materially reduce regressivity.",
+    "relevance_score": 0.88,
+    "credibility_score": 0.78
+  }
+]

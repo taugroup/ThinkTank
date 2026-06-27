@@ -1,0 +1,126 @@
+[
+  {
+    "stakeholder": "Government & Regulatory",
+    "findings": [
+      {
+        "claim": "From the Government & Regulatory view, Should Boston implement congestion pricing downtown primarily affects legal authority.",
+        "evidence_ids": [
+          "PLACEHOLDER-GOV",
+          "PLACEHOLDER-ACADEMIC"
+        ],
+        "confidence": 0.7,
+        "assumptions": [
+          "Local conditions resemble those in source PLACEHOLDER-GOV."
+        ],
+        "limitations": [
+          "Limited city-specific data in the curated corpus."
+        ]
+      }
+    ],
+    "likely_position": "Government & Regulatory is cautiously supportive if legal authority concerns are addressed.",
+    "concerns": [
+      "Potential negative impact on budget",
+      "Potential negative impact on enforceability"
+    ],
+    "proposed_mitigations": [
+      "Targeted measures to protect enforceability"
+    ],
+    "data_gaps": [
+      "Need recent Boston, MA data on legal authority"
+    ],
+    "handoff_summary": "Government & Regulatory: cautiously supportive; key concern = enforceability; 3 sources cited."
+  },
+  {
+    "stakeholder": "Community & Equity",
+    "findings": [
+      {
+        "claim": "From the Community & Equity view, Should Boston implement congestion pricing downtown primarily affects equity.",
+        "evidence_ids": [
+          "PLACEHOLDER-GOV",
+          "PLACEHOLDER-ACADEMIC"
+        ],
+        "confidence": 0.7,
+        "assumptions": [
+          "Local conditions resemble those in source PLACEHOLDER-GOV."
+        ],
+        "limitations": [
+          "Limited city-specific data in the curated corpus."
+        ]
+      }
+    ],
+    "likely_position": "Community & Equity is cautiously supportive if equity concerns are addressed.",
+    "concerns": [
+      "Potential negative impact on affordability",
+      "Potential negative impact on access"
+    ],
+    "proposed_mitigations": [
+      "Targeted measures to protect access"
+    ],
+    "data_gaps": [
+      "Need recent Boston, MA data on equity"
+    ],
+    "handoff_summary": "Community & Equity: cautiously supportive; key concern = access; 3 sources cited."
+  },
+  {
+    "stakeholder": "Economic & Fiscal",
+    "findings": [
+      {
+        "claim": "From the Economic & Fiscal view, Should Boston implement congestion pricing downtown primarily affects economic impact.",
+        "evidence_ids": [
+          "PLACEHOLDER-GOV",
+          "PLACEHOLDER-ACADEMIC"
+        ],
+        "confidence": 0.7,
+        "assumptions": [
+          "Local conditions resemble those in source PLACEHOLDER-GOV."
+        ],
+        "limitations": [
+          "Limited city-specific data in the curated corpus."
+        ]
+      }
+    ],
+    "likely_position": "Economic & Fiscal is cautiously supportive if economic impact concerns are addressed.",
+    "concerns": [
+      "Potential negative impact on cost",
+      "Potential negative impact on competitiveness"
+    ],
+    "proposed_mitigations": [
+      "Targeted measures to protect competitiveness"
+    ],
+    "data_gaps": [
+      "Need recent Boston, MA data on economic impact"
+    ],
+    "handoff_summary": "Economic & Fiscal: cautiously supportive; key concern = competitiveness; 3 sources cited."
+  },
+  {
+    "stakeholder": "Subject-Matter & Implementation Expert",
+    "findings": [
+      {
+        "claim": "From the Subject-Matter & Implementation Expert view, Should Boston implement congestion pricing downtown primarily affects evidence base.",
+        "evidence_ids": [
+          "PLACEHOLDER-GOV",
+          "PLACEHOLDER-ACADEMIC"
+        ],
+        "confidence": 0.7,
+        "assumptions": [
+          "Local conditions resemble those in source PLACEHOLDER-GOV."
+        ],
+        "limitations": [
+          "Limited city-specific data in the curated corpus."
+        ]
+      }
+    ],
+    "likely_position": "Subject-Matter & Implementation Expert is cautiously supportive if evidence base concerns are addressed.",
+    "concerns": [
+      "Potential negative impact on operational feasibility",
+      "Potential negative impact on unintended effects"
+    ],
+    "proposed_mitigations": [
+      "Targeted measures to protect unintended effects"
+    ],
+    "data_gaps": [
+      "Need recent Boston, MA data on evidence base"
+    ],
+    "handoff_summary": "Subject-Matter & Implementation Expert: cautiously supportive; key concern = unintended effects; 3 sources cited."
+  }
+]

@@ -1,4 +1,25 @@
-# ThinkTank – A Framework for Generalizing Domain-Specific AI Agent Systems into Universal Collaborative Intelligence Platforms
+# Policy Think Tank — Local-First Multi-Agent Policy Analysis
+
+> **This repository is being refactored** from TAU Group's scientific **ThinkTank**
+> into a **local-first multi-agent policy think tank**. You enter a broad policy
+> question (e.g. *"Should Boston implement congestion pricing downtown?"*) and the
+> system delegates research to stakeholder agents, synthesizes a recommendation,
+> red-teams it, and forecasts effects with deterministic Python.
+>
+> - **Run the app:** `streamlit run app.py` (runs in mock mode with no model needed).
+> - **Run tests:** `python -m pytest tests/`
+> - **Run evals:** `python evals/run_evals.py`
+> - **Architecture:** see [`ARCHITECTURE.md`](ARCHITECTURE.md),
+>   [`MODEL_SELECTION.md`](MODEL_SELECTION.md), [`ADLC.md`](ADLC.md).
+>
+> **Attribution & license.** Adapted from **TAU Group's ThinkTank** (Texas A&M
+> University), MIT-licensed — see [`LICENSE`](LICENSE). The original scientific
+> virtual-lab documentation is preserved below for reference; the meeting-loop
+> entrypoints are being retired in favor of the LangGraph policy workflow.
+
+---
+
+# (Original) ThinkTank – A Framework for Generalizing Domain-Specific AI Agent Systems into Universal Collaborative Intelligence Platforms
 
 The ThinkTank framework draws inspiration from the collaborative AI methodologies demonstrated in [*The Virtual Lab: AI Agents Design New SARS-CoV-2 Nanobodies with Experimental Validation*](https://www.biorxiv.org/content/10.1101/2024.11.11.623004v1), which showcased the effectiveness of multi-agent systems in scientific research and hypothesis generation.
 

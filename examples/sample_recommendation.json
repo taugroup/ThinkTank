@@ -1,0 +1,105 @@
+{
+  "summary": "Adopt a phased, equity-protected approach to 'Should Boston implement congestion pricing downtown' in Boston, MA, piloted before full rollout and monitored against clear success metrics.",
+  "recommended_actions": [
+    "Implement the core intervention addressing: Should Boston implement congestion pricing downtown",
+    "Add targeted protections for the most affected groups",
+    "Direct benefits/savings toward equity and reinvestment"
+  ],
+  "alternatives": [
+    "No action",
+    "A narrower / lower-cost variant",
+    "A phased pilot only"
+  ],
+  "benefits": [
+    "Direct progress on the stated objective",
+    "A dedicated mechanism to fund follow-through",
+    "Reduced long-term costs of inaction"
+  ],
+  "risks": [
+    "Regressive impact if protections are poorly designed",
+    "Displacement or spillover of the problem to nearby groups"
+  ],
+  "equity_effects": [
+    "Vulnerable groups could be disproportionately burdened without safeguards",
+    "Targeted reinvestment can offset burden if directed to underserved groups"
+  ],
+  "evidence_ids": [
+    "PLACEHOLDER-ACADEMIC",
+    "PLACEHOLDER-GOV"
+  ],
+  "confidence": 0.7,
+  "impact": {
+    "economic": "Net positive if benefits are realized; transition costs for some groups.",
+    "equity": "Risk of regressivity, mitigable via safeguards and targeted reinvestment.",
+    "political": "Contested; visible safeguards and reinvestment build support.",
+    "operational": "Feasible with established delivery mechanisms.",
+    "legal": "Requires confirmation of authorizing authority.",
+    "notes": []
+  },
+  "implementation_plan": {
+    "steps": [
+      {
+        "phase": "Phase 1: Design & Authorization",
+        "actions": [
+          "Confirm legal authority and finalize the policy design",
+          "Define eligibility, scope, and protective carve-outs"
+        ],
+        "timeline": "Months 0-6",
+        "owner": "Lead agency"
+      },
+      {
+        "phase": "Phase 2: Pilot & Build",
+        "actions": [
+          "Stand up the operational and data infrastructure",
+          "Run a limited pilot with monitoring and feedback"
+        ],
+        "timeline": "Months 6-18",
+        "owner": "Lead agency + delivery partners"
+      },
+      {
+        "phase": "Phase 3: Rollout & Reinvestment",
+        "actions": [
+          "Scale based on pilot results",
+          "Direct gains toward affected and underserved groups"
+        ],
+        "timeline": "Months 18-36",
+        "owner": "Oversight body"
+      }
+    ],
+    "success_metrics": [
+      "Measurable progress toward the stated objective vs. baseline",
+      "Costs remain within the stated constraints",
+      "No net harm to the most affected groups"
+    ],
+    "monitoring": [
+      "Quarterly outcome reporting against the success metrics",
+      "Annual equity-impact audit"
+    ]
+  },
+  "alternatives_detail": [
+    {
+      "name": "No action",
+      "description": "Maintain the status quo.",
+      "pros": [
+        "No implementation cost",
+        "No political friction"
+      ],
+      "cons": [
+        "The underlying problem persists",
+        "No new capacity to act"
+      ]
+    },
+    {
+      "name": "Narrower variant",
+      "description": "A smaller-scope, lower-cost version of the intervention.",
+      "pros": [
+        "Lower cost and risk",
+        "Faster to deliver"
+      ],
+      "cons": [
+        "Weaker effect on the objective",
+        "May not reach key groups"
+      ]
+    }
+  ]
+}

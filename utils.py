@@ -4,10 +4,18 @@ import tempfile
 import re, os, copy, shutil, subprocess, tempfile
 import pandas as pd
 import pypandoc
-pypandoc.download_pandoc()
 
 from docx import Document
 from docx.shared import Inches, Pt
+
+
+def _ensure_pandoc() -> None:
+    """Lazily ensure pandoc is available (legacy DOCX path only). Avoids a network
+    download at import time, which would break offline/local-first startup."""
+    try:
+        pypandoc.get_pandoc_version()
+    except OSError:
+        pypandoc.download_pandoc()
 
 import io
 import json
@@ -107,6 +115,7 @@ def _docx_bytes(project_name: str,
         return f"![diagram-{counter[0]}]({img_path})"
 
     full_md = MERMAID_BLOCK.sub(_replace, full_markdown)
+    _ensure_pandoc()
 
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
         tmp_path = tmp.name
@@ -151,3 +160,81 @@ def export_meeting(project_name: str,
     return {
         "docx": _docx_bytes(project_name, project_desc, scientists, md_text)
     }
+
+# ---------------------------------------------------------------------------
+# Policy brief export (NEW — OWNER: Person 4). Pure python-docx, no pandoc.
+# ---------------------------------------------------------------------------
+
+def export_policy_brief(result) -> bytes:
+    """Render a PolicyRunResult as a DOCX policy brief and return the bytes.
+
+    Takes a models.PolicyRunResult. Self-contained (no pandoc/network) so it works
+    offline. Used by the Streamlit download button.
+    """
+    doc = Document()
+    req = result.request
+    doc.add_heading("Policy Brief", level=0)
+    doc.add_paragraph(req.question)
+    meta = doc.add_paragraph()
+    meta.add_run(f"Geography: {req.geography}   |   Generated: {now()}").italic = True
+
+    rec = result.recommendation
+    if rec:
+        doc.add_heading("Executive Summary", level=1)
+        doc.add_paragraph(rec.summary)
+        doc.add_paragraph(f"Confidence: {rec.confidence:.0%}")
+
+        def _bullets(title, items):
+            if not items:
+                return
+            doc.add_heading(title, level=2)
+            for it in items:
+                doc.add_paragraph(str(it), style="List Bullet")
+
+        _bullets("Recommended Actions", rec.recommended_actions)
+        _bullets("Benefits", rec.benefits)
+        _bullets("Risks", rec.risks)
+        _bullets("Equity Effects", rec.equity_effects)
+        if rec.implementation_plan:
+            doc.add_heading("Implementation Plan", level=2)
+            for step in rec.implementation_plan.steps:
+                doc.add_paragraph(
+                    f"{step.phase} ({step.timeline or 'TBD'})", style="List Bullet"
+                )
+                for a in step.actions:
+                    doc.add_paragraph(a, style="List Bullet 2")
+        if rec.evidence_ids:
+            doc.add_heading("Supporting Evidence", level=2)
+            doc.add_paragraph(", ".join(sorted(set(rec.evidence_ids))))
+
+    # Stakeholder positions
+    if result.research:
+        doc.add_heading("Stakeholder Views", level=1)
+        for r in result.research:
+            doc.add_heading(r.stakeholder, level=2)
+            doc.add_paragraph(f"Position: {r.likely_position}")
+            for f in r.findings:
+                doc.add_paragraph(
+                    f"{f.claim} [{', '.join(f.evidence_ids) or 'no citation'}]",
+                    style="List Bullet",
+                )
+
+    # Forecast
+    fc = result.forecast
+    if fc:
+        doc.add_heading("Forecast", level=1)
+        if fc.mode == "qualitative":
+            doc.add_paragraph("Qualitative outlook (no numeric model for this domain):")
+            for line in fc.qualitative:
+                doc.add_paragraph(line, style="List Bullet")
+        else:
+            doc.add_paragraph(f"Numeric scenarios ({fc.domain} domain):")
+            for s in (fc.baseline, fc.conservative, fc.expected, fc.optimistic):
+                if s is not None:
+                    doc.add_paragraph(f"{s.name}: {s.inputs}", style="List Bullet")
+        for a in fc.assumptions:
+            doc.add_paragraph(f"Assumption: {a}", style="List Bullet")
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()

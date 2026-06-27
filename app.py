@@ -1,454 +1,277 @@
+"""Policy Think Tank — Streamlit UI.
+
+OWNER: Person 4 (UI/persistence). Refactored from the original scientific-meeting
+interface into a local-first policy think tank. Five sections: Intake, Agent
+Activity, Stakeholder Views, Final Recommendation, and a Scenario Simulator that
+recalculates forecasts without rerunning the agents.
+
+Until Person 1's graph is fully wired the UI can render examples/sample_result.json
+(mock mode), and `execute_policy_analysis` is the single adapter the UI calls.
+
+Adapted from TAU Group's ThinkTank (MIT). See ARCHITECTURE.md for attribution.
+"""
+
 from __future__ import annotations
-import concurrent.futures
+
+import json
 import os
 
-from pathlib import Path
-from typing import Dict, List, Any
-import json
-import time
-import base64
-from datetime import datetime
-import ast
 import streamlit as st
 
-from agent_builder import build_local_agent
-from ingestion import process_documents
-from retrieval import retrieve_documents
-from think_tank import ThinkTank
-from utils import export_meeting, clean_name
-from agno.memory.v2 import UserMemory
+from forecasters import detect_domain
+from models import PolicyRequest, PolicyRunResult
+from storage import list_runs, load_run
 
-DB_FILE = Path("projects_db copy.json")
-TEMPLATE_FILE = Path("scientist_templates.json")
-
-def img_to_base64(path):
-    return base64.b64encode(Path(path).read_bytes()).decode()
-
-img_b64 = img_to_base64("assets/Logo_tau.png")
-
-if "rows" not in st.session_state:
-    st.session_state.rows = []
-
-if "selected_template" not in st.session_state:
-    st.session_state.selected_template = "<select>"
-
-if "markdown_log" not in st.session_state:
-    st.session_state.markdown_log = []
-
-rows = st.session_state.rows
-
-def download_function(project_name: str,
-                            project_desc: str,
-                            project_data: Dict[str, Any],
-                            meeting: Dict[str, Any],
-                            transcript) -> None:
-    
-    files = export_meeting(project_name, project_desc, project_data["scientists"], meeting, transcript)
-    st.download_button("⬇️  DOCX", files["docx"],
-                    file_name=f"{meeting['topic']}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-
-#  project DB 
-
-def _load_projects() -> Dict[str, Any]:
-    if DB_FILE.exists():
-        return json.loads(DB_FILE.read_text())
-    return {}
+EXAMPLE_RESULT = os.path.join("examples", "sample_result.json")
 
 
-def _save_projects(data: Dict[str, Any]):
-    DB_FILE.write_text(json.dumps(data, indent=2))
-
-#  scientist templates DB
-
-def _load_templates() -> List[Dict[str, str]]:
-    if TEMPLATE_FILE.exists():
-        return json.loads(TEMPLATE_FILE.read_text())
-    # seed with three defaults on first run
-    defaults = [
-        {"title": "Immunologist", "expertise": "Immunopathology, antibody‑antigen interactions", "goal": "Guide immune‑targeting strategies", "role": "Analyse epitope selection and immune response"},
-        {"title": "Machine Learning Expert", "expertise": "Deep learning, protein sequence modelling", "goal": "Develop predictive models for design", "role": "Build & chain ML models to rank candidates"},
-        {"title": "Computational Biologist", "expertise": "Protein folding simulation, molecular dynamics", "goal": "Validate structural stability", "role": "Simulate docking & refine structures"},
-    ]
-    TEMPLATE_FILE.write_text(json.dumps(defaults, indent=2))
-    return defaults
-
-
-def _save_templates(templates: List[Dict[str, str]]) -> None:
-    """Persist scientist templates to disk."""
-    TEMPLATE_FILE.write_text(json.dumps(templates, indent=2))
-
-def build_custom_thinktank(project_desc: str, scientists: List[Dict[str, str]]) -> ThinkTank:
-    lab = ThinkTank(project_desc)
-    lab.scientists.clear()
-    tools = [retrieve_documents]
-    for sd in scientists:
-        lab.scientists.append(
-            build_local_agent(
-                name=sd["title"],
-                description=f"Expertise: {sd['expertise']}. Goal: {sd['goal']}",
-                role=sd["role"],
-                memory=None,
-                storage=lab._storage,
-                tools=tools,
-            )
-        )
-    return lab
-
-def write(name: str, content: str):
-        st.markdown(f"## 🧑‍🔬 {name} \n")
-        st.session_state.markdown_log.append(f"## 🧑‍🔬 {name} \n")
-        st.markdown(content)
-        st.session_state.markdown_log.append(content)
-
-def default_serializer(obj):
-    """Fallback serializer for JSON encoding."""
-    if hasattr(obj, "dict"):       # Pydantic models
-        return obj.dict()
-    if hasattr(obj, "model_dump"): # Pydantic v2
-        return obj.model_dump()
-    if hasattr(obj, "__dict__"):   # Generic Python objects
-        return obj.__dict__
-    return str(obj)  # Final fallback
-
-def save_response(response, filename_prefix="agent_response", project_name=None):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # Create project folder if project_name is provided
-    if project_name:
-        project_folder = clean_name(project_name)
-        os.makedirs(project_folder, exist_ok=True)
-        filename = os.path.join(project_folder, f"{filename_prefix}_{ts}.json")
-    else:
-        filename = f"{filename_prefix}_{ts}.json"
-
+# --- Single adapter the UI calls (mock-capable) ----------------------------
+def execute_policy_analysis(request: PolicyRequest) -> PolicyRunResult:
+    """Run a full analysis. Delegates to the orchestrator; falls back to the
+    bundled example result if the orchestrator is unavailable."""
     try:
-        with open(filename, "w", encoding="utf-8") as f:
-            # messages=response.messages
-            # collected = []
-            # for message in messages:
-            #     if message.role == "tool" and message.tool_name == "retrieve_documents":
-            #         retrieved_data_str = message.content
-            #         retrieved_data = ast.literal_eval(retrieved_data_str)
-            #         collected.append(retrieved_data)
+        from orchestrator import run_policy_analysis
 
-            json.dump(response, f, ensure_ascii=False, indent=2, default=default_serializer)
-        print(f"✅ Saved response to {filename}")
-    except Exception as e:
-        print(f"⚠️ Failed to save response: {e}")
-
-def run_thinktank_meeting(
-    project_name: str,
-    project_desc: str,
-    scientists: List[Dict[str, str]],
-    meeting_topic: str,
-    rounds: int,
-    projects_db: Dict[str, Any],
-):
-    """Execute a team meeting and write transcript + summary back to database."""
-
-    st.session_state.markdown_log = []  # reset log for new meeting
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = []
-        for scientist in st.session_state.rows:
-            print(f"Processing scientist: {scientist['title']}")
-            files = scientist.get('files', [])
-            print(f"Files for {scientist['title']}: {files}")
-            file_bytes_list = [(f.name, f.getvalue()) for f in files]
-
-            future = executor.submit(process_documents, file_bytes_list, clean_name(scientist['title']))
-            futures.append(future)
-
-        # Optionally wait for all to complete and handle exceptions
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                st.error(f"Error during ingestion: {e}")
-
-    lab = build_custom_thinktank(project_desc, scientists)
-
-    st.subheader(f"🧑‍🔬 Team Meeting - {meeting_topic}")
-    st.session_state.markdown_log.append(f"# 🧑‍🔬 Team Meeting - {meeting_topic}")
-    def log(name: str, content: str):
-        write(name, content)
-
-    # PI opening
-    pi_open_response = lab.pi.run(
-        f"You are convening a team meeting. Agenda: {meeting_topic}. Share initial guidance to the scientists..",
-        stream=False,
-    )
-    pi_open = pi_open_response.content
-    log(lab.pi.name, pi_open)
-    save_response(pi_open_response, filename_prefix=f"{lab.pi.name}_opening", project_name=project_name)
-    # Discussion rounds 
-    for r in range(1, rounds + 1):
-        st.markdown(f"### 🔄 Round {r}/{rounds}")
-        st.session_state.markdown_log.append(f"### 🔄 Round {r}/{rounds}")
-        for sci in lab.scientists:
-
-            tool_prompt = f"""
-                You are an expert in a team meeting. Your task is to contribute to the discussion based on your expertise and the context provided.
-                DO NOT summarize or paraphrase the context, but use it to inform your response.
-                Generate a new response every time.
-
-                You have access to the following tool:
-
-                1.Tool: `retrieve_documents`
-                    - Purpose: Retrieve relevant document chunks from the knowledge database using natural language queries.
-                    - Usage:
-                        1. Analyze the current task or context and formulate meaningful queries.
-                        2. Call: retrieve_documents(queries: List[str], collection_name: str) -> List[str]
-                        3. Use collection_name = {clean_name(sci.name)}
-
-                    Instructions:
-                    - First, think about what information is needed to accomplish your task.
-                    - Generate targeted, specific queries based on your expertise.
-                    - Use `retrieve_documents` to fetch supporting content.
-                    - Incorporate retrieved content directly into your reasoning or task output.
-                    - **Do not output the summary or paraphrase the retrieved content — use it as-is.**
-
-                Your goal is to leverage the retrieved knowledge to solve the task accurately and completely.
-            """
-
-            response = sci.run(
-                f"{tool_prompt}\n\nGive your contribution for round {r}:",
-                stream=False,
-            )
-            resp = response.content
-            lab._log("scientist", sci.name, resp)
-            log(sci.name, resp)
-            save_response(response, filename_prefix=f"{sci.name}_{r}_response", project_name=project_name)
-        crit = lab.critic.run(
-            f"Context so far:\n{lab._context()}\n\nCritique round {r}",
-            stream=False,
-        ).content
-        save_response(crit, filename_prefix=f"{lab.critic.name}_critique", project_name=project_name)
-        lab._log("critic", lab.critic.name, crit)
-        log(lab.critic.name, crit)
-
-        synth = lab.pi.run(
-            f"Context so far:\n{lab._context()}\n\nSynthesise round {r} and pose follow‑ups.",
-            stream=False,
-        ).content
-        lab._log("pi", lab.pi.name, synth)
-        log(lab.pi.name + " (synthesis)", synth)
-        save_response(synth, filename_prefix=f"{lab.pi.name}_synthesis", project_name=project_name)
-    # Final summary
-    summary = lab.pi.run(
-        f"Context so far:\n{lab._context()}\n\nProvide the final detailed meeting summary and recommendations.",
-        stream=False,
-    ).content
-    lab._log("pi", lab.pi.name, summary)
-    save_response(summary, filename_prefix=f"{lab.pi.name}_final_summary", project_name=project_name)
-    st.subheader("📝 Final Meeting Summary")
-    st.session_state.markdown_log.append("📝 Final Meeting Summary")
-    st.markdown(summary)
-    st.session_state.markdown_log.append(summary)
-
-    # Memory is now handled automatically by the agent's storage
-    # lab._memory.add_user_memory(memory=UserMemory(memory=summary), user_id=project_name)
+        return run_policy_analysis(request)
+    except Exception as exc:  # pragma: no cover - UI resilience
+        st.warning(f"Falling back to bundled example result: {exc}")
+        with open(EXAMPLE_RESULT, encoding="utf-8") as f:
+            return PolicyRunResult.model_validate(json.load(f))
 
 
-    # Save to DB
-    proj = projects_db.setdefault(project_name, {"description": project_desc, "scientists": scientists, "meetings": []})
-    for sci in scientists:
-        sci.pop("files", None)  # remove files from scientists to avoid bloating the DB
-    proj["description"] = project_desc
-    proj["scientists"] = scientists
-    proj["meetings"].append({
-        "timestamp": int(time.time()),
-        "topic": meeting_topic,
-        "rounds": rounds,
-        "transcript": st.session_state.markdown_log,
-        "summary": summary,
-    })
-    _save_projects(projects_db)
-    st.success("Meeting complete and saved 🎉")
-    return proj
+def _load_example() -> PolicyRunResult:
+    with open(EXAMPLE_RESULT, encoding="utf-8") as f:
+        return PolicyRunResult.model_validate(json.load(f))
 
-st.set_page_config(page_title="Think Tank", layout="wide")
-st.markdown(
-    """
-    <style>
-        [data-testid="stSidebar"] {
-            width: 500px;
-            max-width: 1500px;
-        }
-        [data-testid="stSidebar"] + div .block-container {
-            padding-left: 300px;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-st.markdown(
-    "<h1 style='text-align:center;'>🧠 Think Tank</h1>",
-    unsafe_allow_html=True,
-)
 
-projects_db = _load_projects()
-project_names = sorted(projects_db.keys())
+# --- Rendering -------------------------------------------------------------
+def render_activity(res: PolicyRunResult):
+    st.subheader("🛠️ Agent Activity")
+    for ev in res.events:
+        st.markdown(f"- {ev}")
+    local = sum(1 for m in res.model_events if not m.escalated)
+    esc = sum(1 for m in res.model_events if m.escalated)
+    st.caption(f"Model calls — local: {local} · escalated: {esc} · revisions: {res.revisions}")
 
-# ── Project selection / creation 
-st.sidebar.markdown(
-    f"""
-    <div style="display: flex; align-items: center;">
-        <img src="data:image/png;base64,{img_b64}" width="40" style="margin-right:10px;">
-        <span style="font-size: 14px;">Developed by TAU Group</span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-st.sidebar.markdown("---")
-st.sidebar.header("Project Manager")
-proj_choice = st.sidebar.selectbox("Select a Project", ["➕ New project"] + project_names)
 
-if proj_choice == "➕ New project":
-    project_name = st.sidebar.text_input("New project name")
-    project_data = {"description": "", "scientists": [], "meetings": []}
-    if not project_name:
-        st.stop()
-else:
-    project_name = proj_choice
-    project_data = projects_db[project_name]
+def render_research(res: PolicyRunResult):
+    if not res.research_briefs:
+        return
+    st.subheader("🔎 Research")
+    for b in res.research_briefs:
+        with st.expander(f"{b.topic}  ·  skills: {', '.join(b.skills_used) or '—'}"):
+            st.caption(b.summary)
+            for f in b.findings:
+                st.markdown(f"- {f.claim}  _[{', '.join(f.evidence_ids) or 'no citation'}]_")
 
-# ── Project description --
-project_desc = st.sidebar.text_area("Project description", value=project_data.get("description", ""), height=120)
 
-# ── Scientist roster --
+def render_stakeholders(res: PolicyRunResult):
+    st.subheader("👥 Stakeholder Views")
+    # Map stakeholder name -> assigned skills (Director-decided) for display.
+    skills_by_name = {s.name: s.skills for s in res.stakeholders}
+    for r in res.research:
+        skills = skills_by_name.get(r.stakeholder, [])
+        label = f"{r.stakeholder} — {r.likely_position}"
+        with st.expander(label):
+            if skills:
+                st.caption("Skills assigned by orchestrator: " + ", ".join(skills))
+            for f in r.findings:
+                st.markdown(f"**Finding:** {f.claim}")
+                st.caption(
+                    f"Evidence: {', '.join(f.evidence_ids) or 'none'} · "
+                    f"confidence {f.confidence:.0%}"
+                )
+                if f.assumptions:
+                    st.caption("Assumptions: " + "; ".join(f.assumptions))
+            if r.concerns:
+                st.markdown("**Concerns:** " + "; ".join(r.concerns))
+            if r.data_gaps:
+                st.markdown("**Data gaps:** " + "; ".join(r.data_gaps))
 
-# Scientist templates loaded from disk 
-TEMPLATES: List[Dict[str, str]] = _load_templates()
 
-st.sidebar.subheader("Experts Manager")
-
-# Template management
-with st.sidebar.expander("Manage Experts and templates", expanded=False):
-    # Select existing template to load
-    selected_tpl_title = st.selectbox("Load template to edit", ["<new>"] + [t["title"] for t in TEMPLATES], key="tpl_select")
-
-    # Populate fields depending on selection
-    if selected_tpl_title == "<new>":
-        tpl_data = {"title": "", "expertise": "", "goal": "", "role": ""}
-    else:
-        tpl_data = next(t for t in TEMPLATES if t["title"] == selected_tpl_title)
-
-    new_t = st.text_input("Title", value=tpl_data["title"], key="tpl_title")
+def render_recommendation(res: PolicyRunResult):
+    rec = res.recommendation
+    if not rec:
+        return
+    st.subheader("📋 Final Recommendation")
+    st.markdown(f"**Executive summary:** {rec.summary}")
+    st.markdown(f"_Confidence: {rec.confidence:.0%}_")
     col1, col2 = st.columns(2)
     with col1:
-        new_e = st.text_area("Expertise", value=tpl_data["expertise"], height=70, key="tpl_exp")
+        st.markdown("**Recommended actions**")
+        for a in rec.recommended_actions:
+            st.markdown(f"- {a}")
+        st.markdown("**Benefits**")
+        for b in rec.benefits:
+            st.markdown(f"- {b}")
     with col2:
-        new_g = st.text_area("Goal", value=tpl_data["goal"], height=70, key="tpl_goal")
-    new_r = st.text_area("Role", value=tpl_data["role"], height=70, key="tpl_role")
+        st.markdown("**Risks**")
+        for r in rec.risks:
+            st.markdown(f"- {r}")
+        st.markdown("**Equity effects**")
+        for e in rec.equity_effects:
+            st.markdown(f"- {e}")
+    if rec.implementation_plan:
+        st.markdown("**Implementation plan**")
+        for step in rec.implementation_plan.steps:
+            st.markdown(f"- *{step.phase}* ({step.timeline or 'TBD'}): " + "; ".join(step.actions))
+    if rec.evidence_ids:
+        st.caption("Supporting evidence: " + ", ".join(sorted(set(rec.evidence_ids))))
+    if res.critiques:
+        with st.expander("🔴 Red Team review"):
+            c = res.critiques[-1]
+            st.markdown(f"Severity: **{c.severity}**")
+            for i in c.issues:
+                st.markdown(f"- {i}")
 
-    # Save / update template
-    if st.button("Save template") and new_t.strip():
-        TEMPLATES = [t for t in TEMPLATES if t["title"] != new_t]
-        TEMPLATES.append({"title": new_t, "expertise": new_e, "goal": new_g, "role": new_r})
-        _save_templates(TEMPLATES)
-        (st.rerun if hasattr(st, 'rerun') else st.experimental_rerun)()
 
-    # delete templates
-    del_tpl = st.multiselect("Delete templates", [t["title"] for t in TEMPLATES])
-    if del_tpl and st.button("Remove selected templates"):
-        TEMPLATES = [t for t in TEMPLATES if t["title"] not in del_tpl]
-        _save_templates(TEMPLATES)
-        (st.rerun if hasattr(st, 'rerun') else st.experimental_rerun)()
+def _scenario_table(fc) -> dict:
+    return {
+        s.name: {
+            "trip_reduction": s.trip_reduction,
+            "net_revenue": s.net_revenue,
+            "transit_increase": s.transit_demand_increase,
+            "emissions_change": s.emissions_change,
+            "equity_risk": s.equity_risk_index,
+        }
+        for s in (fc.baseline, fc.conservative, fc.expected, fc.optimistic)
+        if s is not None
+    }
 
-    #  Load or initialise project rows  project rows 
-    if proj_choice == '➕ New project':
-        if "rows" not in st.session_state:
-            st.session_state.rows = project_data.get("scientists", [])
-    else:
-        if len(st.session_state.rows) < 1 or 'files' not in st.session_state.rows[-1]:
-            st.session_state.rows = project_data.get("scientists", [])
 
-    def _add_template():
-        sel = st.session_state.tpl_selectbox
-        if sel != "<select>" and sel not in [r["title"] for r in st.session_state.rows]:
-            st.session_state.rows.append(next(t for t in TEMPLATES if t["title"] == sel))
-            _save_projects(projects_db)
-        st.session_state.tpl_selectbox = "<select>"
-
-    #  Add from template --
-    st.selectbox(
-        "Add scientist from template",
-        ["<select>"] + [t["title"] for t in TEMPLATES],
-        key="tpl_selectbox",
-        on_change=_add_template,
-    )
-
-    #  Manual create scientist 
-    if st.button("Add blank scientist"):
-        st.session_state.rows.append({"title": f"Scientist {len(st.session_state.rows)+1}", "expertise": "", "goal": "", "role": ""})
-        st.rerun()
-
-    #  Editable table 
-    st.session_state.rows = st.session_state.rows[:8]  # limit to 8
-    display_rows = []
-    real_rows = st.session_state.rows
-    for r in real_rows:
-        r_view = r.copy()
-        if "files" in r_view:
-            # show just the count or filenames
-            val = r_view["files"]
-            r_view["files"] = len(val) if isinstance(val, (list, tuple)) else (val or 0)
-        display_rows.append(r_view)
-
-    scientist_table = st.data_editor(display_rows, num_rows="dynamic", use_container_width=True, key="scientist_table")
-
-    def _files_changed(i: int):
-        uploaded = st.session_state[f"files_{i}"]      # new value after change
-        st.session_state.rows[i]["files"] = uploaded
-        print(f"Files for scientist {i}: {[f.name for f in uploaded]}")
-
-    for i, scientist in enumerate(st.session_state.rows):
-        c = st.container()
-        c.markdown(f"### Files for {scientist['title'] or f'Scientist {i+1}'}")
-        c.file_uploader(
-            "Choose files for the vector store",
-            accept_multiple_files=True,
-            key=f"files_{i}",
-            on_change=_files_changed,
-            args=(i,),        # pass only the index
+def render_forecast(res: PolicyRunResult):
+    fc = res.forecast
+    if not fc:
+        return
+    st.subheader("🔮 Forecast")
+    if fc.mode == "qualitative":
+        st.info(
+            "No deterministic model matched this policy domain, so only a "
+            "directional outlook is shown — no numeric figures."
         )
+        for line in fc.qualitative:
+            st.markdown(f"- {line}")
+    else:
+        st.caption(f"Numeric forecast — {fc.domain} domain.")
+        st.dataframe(_scenario_table(fc))
+    with st.expander("Assumptions & limitations"):
+        for a in fc.assumptions:
+            st.markdown(f"- {a}")
+        st.markdown("**Limitations**")
+        for limit in fc.limitations:
+            st.markdown(f"- {limit}")
 
-# ── Meeting selection / creation -- / creation --
-st.sidebar.subheader("Team Meeting")
-meetings = project_data.get("meetings", [])
-meeting_labels = [f"{i+1}. {m['topic']}" for i, m in enumerate(meetings)]
-meeting_choice = st.sidebar.selectbox("Select a meeting", ["New meeting"] + meeting_labels)
 
-if meeting_choice == "New meeting":
-    meeting_topic = st.sidebar.text_input("New meeting topic / title")
-    rounds = int(st.sidebar.number_input("Rounds", min_value=1, value=3, step=1))
-    run_btn = st.sidebar.button("Run Team Meeting")
-    if run_btn:
-        clean_scientists = [row for row in scientist_table if row["title"].strip()]
-        if not clean_scientists:
-            st.error("Provide at least one scientist")
-            st.stop()
-        proj = run_thinktank_meeting(project_name, project_desc, clean_scientists, meeting_topic, rounds, projects_db)
-        download_function(project_name, project_desc, project_data, proj["meetings"][-1], st.session_state.markdown_log)
-else:
-    # Load existing meeting 
-    sel_index = meeting_labels.index(meeting_choice)
-    meeting = meetings[sel_index]
-    st.session_state.markdown_log = []
-    st.markdown(f"## 🗂️ Meeting Record - {meeting['topic']}")
-    st.session_state.markdown_log.append(f"## 🗂️ Meeting Record - {meeting['topic']}")
-    for msg in meeting["transcript"]:
-        if type(msg) is dict:
-            name = msg.get("name", "Unknown")
-            content = msg.get("content", "")
-            write(name, content)
-        else:
-            st.markdown(msg)
-            st.session_state.markdown_log.append(msg)
-    st.markdown("### Summary")
-    st.session_state.markdown_log.append("### Summary")
-    st.markdown(meeting["summary"])
-    st.session_state.markdown_log.append(meeting["summary"])
-    download_function(project_name, project_desc, project_data, meeting, meeting['transcript'])
+def render_simulator(res: PolicyRunResult):
+    """Only shown for numeric, domain-matched forecasts (e.g. transportation)."""
+    module = detect_domain(res.request)
+    if module is None or not res.forecast or res.forecast.mode != "numeric":
+        return
+    if res.forecast_parameters is None:
+        return
+
+    st.subheader("🎛️ Scenario Simulator")
+    st.caption("Adjust levers and recalculate forecasts — agents are NOT rerun.")
+    base = res.forecast_parameters
+    col1, col2 = st.columns(2)
+    with col1:
+        fee = st.slider("Daily fee ($)", 0.0, 30.0, float(base.daily_fee), 0.5)
+        exemption = st.slider("Exemption rate", 0.0, 1.0, float(base.exemption_rate), 0.05)
+    with col2:
+        enforcement = st.slider(
+            "Enforcement effectiveness", 0.0, 1.0, float(base.enforcement_effectiveness), 0.05
+        )
+        reinvest = st.slider(
+            "Transit reinvestment", 0.0, 1.0, float(base.transit_reinvestment_pct), 0.05
+        )
+    params = base.model_copy(
+        update={
+            "daily_fee": fee,
+            "exemption_rate": exemption,
+            "enforcement_effectiveness": enforcement,
+            "transit_reinvestment_pct": reinvest,
+        }
+    )
+    fc = module.forecast(res.recommendation, params)
+    st.dataframe(_scenario_table(fc))
+
+
+def main():
+    st.set_page_config(page_title="Policy Think Tank", layout="wide")
+    st.markdown("<h1 style='text-align:center;'>🏛️ Policy Think Tank</h1>", unsafe_allow_html=True)
+    st.caption("Local-first multi-agent policy analysis · adapted from TAU Group's ThinkTank")
+
+    st.sidebar.header("Policy Intake")
+    question = st.sidebar.text_area(
+        "Policy question",
+        "Should our city introduce a guaranteed basic income pilot?",
+        help="Any policy question, in any domain.",
+    )
+    geography = st.sidebar.text_input("Geography", "")
+    objective = st.sidebar.text_input("Objective", "")
+    constraints = st.sidebar.text_area("Constraints (one per line)", "")
+    timeline = st.sidebar.text_input("Timeline", "")
+    st.sidebar.file_uploader("Supporting files (optional)", accept_multiple_files=True)
+
+    run_clicked = st.sidebar.button("Run Policy Analysis", type="primary")
+    show_example = st.sidebar.button("Load example result")
+
+    # Past runs (persisted in SQLite by the orchestrator).
+    try:
+        history = list_runs()
+    except Exception:
+        history = []
+    if history:
+        st.sidebar.markdown("---")
+        labels = ["—"] + [f"{h['question'][:40]} ({h['run_id'][:6]})" for h in history]
+        chosen = st.sidebar.selectbox("Past runs", labels)
+        if chosen != "—":
+            picked = history[labels.index(chosen) - 1]
+            loaded = load_run(picked["run_id"])
+            if loaded is not None:
+                st.session_state.result = loaded
+
+    if "result" not in st.session_state:
+        st.session_state.result = None
+
+    if run_clicked:
+        req = PolicyRequest(
+            question=question,
+            geography=geography,
+            objective=objective,
+            constraints=[c.strip() for c in constraints.splitlines() if c.strip()],
+            timeline=timeline or None,
+        )
+        with st.spinner("Running policy analysis..."):
+            st.session_state.result = execute_policy_analysis(req)
+    elif show_example:
+        st.session_state.result = _load_example()
+
+    res = st.session_state.result
+    if res is None:
+        st.info("Enter a policy question and click **Run Policy Analysis**, or load the example.")
+        return
+
+    render_activity(res)
+    render_research(res)
+    render_stakeholders(res)
+    render_recommendation(res)
+    render_forecast(res)
+    render_simulator(res)
+
+    # Export the brief (lazy import so docx/pandoc deps don't block app startup).
+    try:
+        from utils import export_policy_brief
+
+        st.download_button(
+            "⬇️ Download policy brief (DOCX)",
+            export_policy_brief(res),
+            file_name=f"policy_brief_{res.run_id}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    except Exception as exc:  # pragma: no cover - export is non-critical
+        st.caption(f"Brief export unavailable: {exc}")
+
+
+if __name__ == "__main__":
+    main()

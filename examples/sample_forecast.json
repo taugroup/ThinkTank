@@ -1,0 +1,81 @@
+{
+  "mode": "numeric",
+  "domain": "transportation",
+  "baseline": {
+    "name": "baseline",
+    "trip_reduction": 0.0,
+    "gross_revenue": 0.0,
+    "net_revenue": 0.0,
+    "transit_demand_increase": 0.0,
+    "emissions_change": -0.0,
+    "commuter_burden": 0.0,
+    "equity_risk_index": 0.34,
+    "inputs": {
+      "effective_response_rate": 0.0,
+      "effective_enforcement": 0.0,
+      "chargeable_trips_per_day": 102000.0
+    }
+  },
+  "conservative": {
+    "name": "conservative",
+    "trip_reduction": 2457945.0,
+    "gross_revenue": 207378495.0,
+    "net_revenue": 162378495.0,
+    "transit_demand_increase": 1474767.0,
+    "emissions_change": -11306547.0,
+    "commuter_burden": 829513.98,
+    "equity_risk_index": 0.34,
+    "inputs": {
+      "effective_response_rate": 0.126,
+      "effective_enforcement": 0.765,
+      "chargeable_trips_per_day": 102000.0
+    }
+  },
+  "expected": {
+    "name": "expected",
+    "trip_reduction": 4131000.0,
+    "gross_revenue": 192321000.0,
+    "net_revenue": 147321000.0,
+    "transit_demand_increase": 2478600.0,
+    "emissions_change": -19002600.0,
+    "commuter_burden": 769284.0,
+    "equity_risk_index": 0.34,
+    "inputs": {
+      "effective_response_rate": 0.18,
+      "effective_enforcement": 0.9,
+      "chargeable_trips_per_day": 102000.0
+    }
+  },
+  "optimistic": {
+    "name": "optimistic",
+    "trip_reduction": 5370300.0,
+    "gross_revenue": 181167300.0,
+    "net_revenue": 136167300.0,
+    "transit_demand_increase": 3222180.0,
+    "emissions_change": -24703380.0,
+    "commuter_burden": 724669.2,
+    "equity_risk_index": 0.34,
+    "inputs": {
+      "effective_response_rate": 0.234,
+      "effective_enforcement": 0.9,
+      "chargeable_trips_per_day": 102000.0
+    }
+  },
+  "qualitative": [],
+  "assumptions": [
+    "Average CO2 avoided per deterred trip = 4.6 kg.",
+    "Mode shift to transit = 60% of deterred trips.",
+    "Baseline scenario assumes the status quo (no pricing in effect).",
+    "Conservative assumes 70% of the modeled behavioral response and 85% enforcement.",
+    "Optimistic assumes 130% of the modeled behavioral response.",
+    "Exempt trips never pay and are never deterred."
+  ],
+  "limitations": [
+    "Figures are scenario estimates, not predictions of actual outcomes.",
+    "Behavioral response and mode-shift constants are illustrative, not city-calibrated.",
+    "Induced demand, boundary effects, and economic feedback are not modeled."
+  ],
+  "sensitivity": {
+    "net_revenue_per_10pct_fee_increase": 19232100.0
+  }
+}

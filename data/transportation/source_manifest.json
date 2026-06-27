@@ -1,0 +1,46 @@
+{
+  "domain": "urban_transportation",
+  "description": "Curated evidence collection for the congestion-pricing demo. Each entry is ingested into the shared 'transportation' Chroma collection with metadata for filtering and credibility ranking. OWNER: Person 2.",
+  "sources": [
+    {
+      "source_id": "TFL-2008-CC",
+      "title": "Central London Congestion Charging: Impacts Monitoring Sixth Annual Report",
+      "organization": "Transport for London",
+      "source_type": "government_report",
+      "publication_date": "2008",
+      "geography": "London, UK",
+      "file": "documents/tfl_congestion_charging_2008.pdf",
+      "status": "placeholder"
+    },
+    {
+      "source_id": "TRB-2021-CP",
+      "title": "Congestion Pricing in Practice: A Comparative Review",
+      "organization": "Transportation Research Board",
+      "source_type": "academic",
+      "publication_date": "2021",
+      "geography": "Global",
+      "file": "documents/trb_congestion_pricing_review_2021.pdf",
+      "status": "placeholder"
+    },
+    {
+      "source_id": "MBTA-2023-RIDERSHIP",
+      "title": "MBTA Ridership and Service Open Data Export",
+      "organization": "Massachusetts Bay Transportation Authority",
+      "source_type": "open_data",
+      "publication_date": "2023",
+      "geography": "Boston, MA",
+      "file": "datasets/mbta_ridership_2023.csv",
+      "status": "placeholder"
+    },
+    {
+      "source_id": "NYC-2019-EQUITY",
+      "title": "Central Business District Tolling: Equity Considerations",
+      "organization": "NYC Metropolitan Transportation Authority",
+      "source_type": "case_study",
+      "publication_date": "2019",
+      "geography": "New York, NY",
+      "file": "documents/nyc_cbd_tolling_equity_2019.pdf",
+      "status": "placeholder"
+    }
+  ]
+}
